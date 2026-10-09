@@ -1,0 +1,105 @@
+package com.tyust.course.schedule
+
+import android.content.SharedPreferences
+import com.tyust.course.academic.AcademicStudyAdapter
+import com.tyust.course.academic.AcademicStudyBridge
+import com.tyust.course.academic.AcademicStudyParser
+import com.tyust.course.academic.AcademicStudyReader
+import com.tyust.course.academic.AcademicTerm
+import org.json.JSONObject
+
+internal data class CachedSchedule(
+    val currentTerm: AcademicTerm,
+    val term: AcademicTerm,
+    val json: String,
+    val fromCache: Boolean,
+    val calendar: JSONObject? = null
+)
+
+/** Account/term data survives login sessions. Entry refreshes and manual sync both bypass it. */
+internal class ScheduleCacheStore(
+    private val preferences: SharedPreferences,
+    private val calendarTerm: () -> AcademicTerm = { AcademicStudyReader.calendarTerm() }
+) {
+    private fun prefix(account: String, school: String) = "schedule_${account}_${school}"
+
+    fun currentTerm(account: String, school: String): AcademicTerm {
+        if(school=="scvtc" && com.tyust.course.scvtc.ScvtcRuntime.semester.isNotBlank()) return AcademicTerm(com.tyust.course.scvtc.ScvtcRuntime.semester)
+        val calendar = calendarTerm()
+        val known = runCatching {
+            JSONObject(preferences.getString("${prefix(account, school)}_current", null) ?: return@runCatching null)
+        }.getOrNull()
+        // Resolve the school's term again when the local academic half-year changes.
+        // A school can legitimately start later than the calendar fallback.
+        val current = known?.takeIf { it.optString("calendar") == calendar.id }
+        return current?.optJSONObject("termMetadata")?.let(AcademicTerm::fromJson)
+            ?: current?.optString("term")?.let(AcademicStudyParser::term) ?: calendar
+    }
+
+    fun read(account: String, school: String, term: AcademicTerm): String? {
+        val base = prefix(account, school)
+        val keys = buildList {
+            add("${base}_${term.id}")
+            add("${base}_${term.id}_last_good")
+            if (term.semester in 1..2) add("${base}_${term.year}_${if (term.semester == 1) 3 else 12}")
+        }
+        return keys.firstNotNullOfOrNull { key ->
+            runCatching { preferences.getString(key, null) }.getOrNull()
+                ?.takeIf { ScheduleJson.parse(it) != null && (school!="scvtc" || ScheduleJson.parse(it)!!.isNotEmpty() || key.endsWith("_last_good")) }
+        }
+    }
+
+    fun selected(account: String, school: String, nextSemester: Boolean): CachedSchedule? {
+        val current = currentTerm(account, school)
+        val term = if (nextSemester) runCatching { current.next() }.getOrNull() ?: return null else current
+        return read(account, school, term)?.let { CachedSchedule(current, term, it, true) }
+    }
+
+    suspend fun load(
+        account: String,
+        school: String,
+        nextSemester: Boolean,
+        forceRefresh: Boolean,
+        reader: () -> AcademicStudyAdapter
+    ): CachedSchedule {
+        if (!forceRefresh) selected(account, school, nextSemester)?.let { return it }
+        val remote = reader()
+        val catalog = remote.catalog()
+        val current = catalog.currentTerm
+        val next = if (nextSemester) current.next() else current
+        val term = catalog.terms.firstOrNull { it.id == next.id }
+            ?: throw com.tyust.course.academic.AcademicException(com.tyust.course.academic.AcademicStatus.UNSUPPORTED, "学校尚未提供所选学期")
+        // Existing installations may have data but no persisted current-term metadata yet.
+        if (!forceRefresh) read(account, school, term)?.let { return CachedSchedule(current, term, it, true) }
+        val json = AcademicStudyBridge.scheduleJson(remote.schedule(term))
+        return CachedSchedule(current, term, json, false, optionalCalendar(remote, term))
+    }
+
+    companion object {
+        suspend fun optionalCalendar(remote: AcademicStudyAdapter, term: AcademicTerm): JSONObject? = try {
+            remote.calendar(term)
+        } catch (e: java.io.IOException) { null }
+        catch (e: com.tyust.course.academic.AcademicException) {
+            if (e.status !in setOf(com.tyust.course.academic.AcademicStatus.NETWORK_RETRYABLE,
+                    com.tyust.course.academic.AcademicStatus.PAGE_CHANGED, com.tyust.course.academic.AcademicStatus.UNSUPPORTED)) throw e
+            null
+        }
+    }
+
+    fun save(account: String, school: String, schedule: CachedSchedule, fetchedAt: Long = System.currentTimeMillis()) {
+        require(ScheduleJson.parse(schedule.json) != null) { "Invalid timetable must not replace the cache" }
+        val base = prefix(account, school)
+        val previous=read(account,school,schedule.term)
+        val previousCourses=previous?.let(ScheduleJson::parse)
+        val nextCourses=ScheduleJson.parse(schedule.json)!!
+        require(!(school=="scvtc" && previousCourses?.isNotEmpty()==true && nextCourses.isEmpty())){"空结果不能覆盖本地课表"}
+        if(previousCourses?.isNotEmpty()==true)check(preferences.edit().putString("${base}_${schedule.term.id}_last_good",previous).commit()){"未能备份本地课表"}
+        check(preferences.edit()
+            .putString("${base}_${schedule.term.id}", schedule.json)
+            .putLong("${base}_${schedule.term.id}_time", fetchedAt)
+            .putString("${base}_current", JSONObject().put("term", schedule.currentTerm.id)
+                .put("termMetadata", schedule.currentTerm.toJson())
+                .put("calendar", calendarTerm().id).toString())
+            .commit()) { "Timetable cache could not be saved" }
+    }
+}
