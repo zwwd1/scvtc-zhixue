@@ -1,6 +1,6 @@
 # 构建原理
 
-川职·知学基于 zhengfang-apk 原生工程，保留 Compose 界面、插件平台、课表编辑、提醒和桌面组件。本校适配位于 `app/src/main/java/cn/scvtc/campus`，学校数据校验位于 `school-core`。插件中心的其他学校沿用各自适配器，不代表全部经过本项目实机验证。
+川职·知学基于 zhengfang-apk 原生工程，保留 Compose 界面、插件平台、课表编辑、提醒和桌面组件。本校认证与接口位于 `app/src/main/java/cn/scvtc/campus`，页面和同步协调位于 `app/src/main/java/com/tyust/course/scvtc`，学校数据校验位于 `school-core`。插件中心的其他学校沿用各自适配器，不代表全部经过本项目实机验证。
 
 ```mermaid
 flowchart LR

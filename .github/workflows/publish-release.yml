@@ -1,0 +1,60 @@
+name: Publish signed APK
+on:
+  push:
+    branches: [main]
+    paths: ["dist/**", "releases/1.0.0.md", ".github/workflows/publish-release.yml"]
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Verify and publish the already signed local build
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 - <<'PY'
+          import hashlib, json, os, urllib.error, urllib.request
+          repo, revision = os.environ['GITHUB_REPOSITORY'], os.environ['GITHUB_SHA']
+          raw = 'https://raw.githubusercontent.com/' + repo + '/' + revision + '/'
+          def read(path):
+              return urllib.request.urlopen(raw + path, timeout=120).read()
+          meta = json.loads(read('BUILD_PROVENANCE.json'))
+          name = meta['artifact']['file']
+          apk = read('dist/' + name)
+          checksum = read('dist/' + name + '.sha256')
+          digest = hashlib.sha256(apk).hexdigest()
+          assert digest == meta['artifact']['sha256'] == checksum.decode().split()[0]
+          assert len(apk) == meta['artifact']['size']
+          headers = {'Authorization': 'Bearer ' + os.environ['GH_TOKEN'],
+                     'Accept': 'application/vnd.github+json',
+                     'X-GitHub-Api-Version': '2026-03-10'}
+          api = 'https://api.github.com/repos/' + repo
+          def request(url, data=None, content_type='application/json'):
+              h = dict(headers)
+              if data is not None: h['Content-Type'] = content_type
+              return json.load(urllib.request.urlopen(urllib.request.Request(url, data=data, headers=h), timeout=120))
+          try:
+              release = request(api + '/releases/tags/v1.0.0')
+          except urllib.error.HTTPError as error:
+              if error.code != 404: raise
+              release = request(api + '/releases', json.dumps({
+                  'tag_name': 'v1.0.0', 'target_commitish': revision,
+                  'name': meta['name'] + ' 1.0.0', 'body': read('releases/1.0.0.md').decode(),
+                  'draft': False, 'prerelease': False, 'make_latest': 'true'
+              }, ensure_ascii=False).encode())
+          existing = {asset['name']: asset for asset in release['assets']}
+          for filename, data, mime in [(name, apk, 'application/vnd.android.package-archive'),
+                                       (name + '.sha256', checksum, 'text/plain')]:
+              if filename in existing:
+                  asset = existing[filename]
+                  expected = 'sha256:' + hashlib.sha256(data).hexdigest()
+                  assert asset.get('digest') == expected, 'Existing release asset differs; it was not overwritten.'
+                  continue
+              upload = release['upload_url'].split('{')[0] + '?name=' + filename
+              result = request(upload, data, mime)
+              assert result['size'] == len(data)
+              print('Published:', filename)
+          PY

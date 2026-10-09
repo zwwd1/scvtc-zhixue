@@ -4,6 +4,12 @@
 
 知学保留原生课表、课程编辑、提醒、小组件和插件中心，接入川职官方 CAS 与教务 JSON 接口。首次登录后，在本机加密保存已验证的凭据；之后检查 Session，必要时恢复认证并继续同步。学校要求补充验证时，仍需本人完成。
 
+## 下载与验证
+
+- [1.0.0 原签名 APK](https://raw.githubusercontent.com/zwwd1/scvtc-zhixue/main/dist/scvtc-campus-next-1.0.0.apk) · [SHA-256](dist/scvtc-campus-next-1.0.0.apk.sha256)
+- [完整源码](https://github.com/zwwd1/scvtc-zhixue/archive/refs/heads/main.zip) · [验证记录](VERIFICATION.md) · [源码与 APK 对应关系](BUILD_PROVENANCE.json)
+- 最低 Android 13；覆盖安装请保留应用数据。仓库源码不含原签名私钥，自行使用其他私钥打包不能覆盖此 APK。
+
 ## 使用入口
 
 | 需要什么 | 说明 |
@@ -37,9 +43,9 @@
 
 ## 源码与构建
 
-本校适配在 `app/src/main/java/cn/scvtc/campus` 与 `school-core`，原生课表与插件平台保留在对应基底模块。准备 JDK 21、Android SDK 37.0 与 Build Tools，设置 `JAVA_HOME`、`ANDROID_HOME` 后使用项目 Gradle Wrapper。覆盖安装要求保留 `cn.scvtc.campus.next`、原签名和递增的 `versionCode`；源码仓库不包含签名私钥。
+本校认证与接口在 `app/src/main/java/cn/scvtc/campus`，原生页面和同步协调在 `app/src/main/java/com/tyust/course/scvtc`，数据校验在 `school-core`。原生课表与插件平台保留在对应基底模块。准备 JDK 21、Android SDK 37.0 与 Build Tools，设置 `JAVA_HOME`、`ANDROID_HOME` 后使用项目 Gradle Wrapper。覆盖安装要求保留 `cn.scvtc.campus.next`、原签名和递增的 `versionCode`；源码仓库不包含签名私钥。
 
-构建、签名和实际设备验证分别记录。编译成功不等于真实登录、Session 过期恢复或所有系统版本验收成功，未完成的验证不会写成已通过。
+已完成本地发布构建、原签名与对齐检查，以及最终源码的 10 项既有认证恢复 / 账号隔离检查。最终 APK 的手机登录和重启免输入尚未完成，详见 [验证记录](VERIFICATION.md)。
 
 ## 致谢项目
 
