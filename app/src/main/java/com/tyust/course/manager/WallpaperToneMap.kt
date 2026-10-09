@@ -50,14 +50,15 @@ internal class WallpaperToneMap(
         viewportHeight: Int,
         region: WallpaperRegion,
         blur: Float,
-        dim: Float
+        dim: Float,
+        focusX:Float=0.5f,focusY:Float=0.5f,zoom:Float=1f
     ): WallpaperRegionAppearance {
         val backgrounds = sampleRegion(
             viewportWidth = viewportWidth.coerceAtLeast(1),
             viewportHeight = viewportHeight.coerceAtLeast(1),
             region = region,
             blur = blur.coerceIn(0f, 1f),
-            dim = dim.coerceIn(0f, 1f)
+            dim = dim.coerceIn(0f, 1f),focusX=focusX,focusY=focusY,zoom=zoom
         )
         return resolveWallpaperAppearance(backgrounds)
     }
@@ -77,9 +78,10 @@ internal class WallpaperToneMap(
     }
 
     fun usesDarkBarIcons(viewportWidth: Int, viewportHeight: Int, region: WallpaperRegion,
-        blur: Float, dim: Float, overlayArgb: Int = WhiteSurface, overlayAlpha: Float = 0f): Boolean {
+        blur: Float, dim: Float, overlayArgb: Int = WhiteSurface, overlayAlpha: Float = 0f,
+        focusX:Float=0.5f,focusY:Float=0.5f,zoom:Float=1f): Boolean {
         val samples = sampleRegion(viewportWidth.coerceAtLeast(1), viewportHeight.coerceAtLeast(1), region,
-            blur.coerceIn(0f, 1f), dim.coerceIn(0f, 1f))
+            blur.coerceIn(0f, 1f), dim.coerceIn(0f, 1f),focusX,focusY,zoom)
         return minimumContrast(DarkForeground, overlayArgb, overlayAlpha, samples) >=
             minimumContrast(LightForeground, overlayArgb, overlayAlpha, samples)
     }
@@ -89,16 +91,16 @@ internal class WallpaperToneMap(
         viewportHeight: Int,
         region: WallpaperRegion,
         blur: Float,
-        dim: Float
+        dim: Float,focusX:Float,focusY:Float,zoom:Float
     ): List<Int> {
         val scale = max(
             viewportWidth.toDouble() / sourceWidth.toDouble(),
             viewportHeight.toDouble() / sourceHeight.toDouble()
-        )
+        )*zoom.coerceIn(1f,3f)
         val visibleSourceWidth = viewportWidth / scale
         val visibleSourceHeight = viewportHeight / scale
-        val sourceLeft = (sourceWidth - visibleSourceWidth) / 2.0
-        val sourceTop = (sourceHeight - visibleSourceHeight) / 2.0
+        val sourceLeft = (sourceWidth - visibleSourceWidth)*focusX.coerceIn(0f,1f)
+        val sourceTop = (sourceHeight - visibleSourceHeight)*focusY.coerceIn(0f,1f)
 
         fun sourceX(windowX: Double): Double =
             sourceLeft + windowX.coerceIn(0.0, viewportWidth.toDouble()) / scale

@@ -29,11 +29,17 @@ App 优先恢复本地 Session，失效后尝试 SSO，再必要时使用本机�
 | 成绩 | `score/scorequerymanage/studentQuery` | 全部分页、总数稳定、账号匹配 |
 | 正考安排 | `exam/studentExamSchedule/queryPositiveExamSchedule` | 完整分页与考试字段 |
 | 等级考试结果 | `score/gradeExamScore/studentQuery` | 已验证空结果，有记录时仍需字段校验 |
-| 毕业学分要求 | `scheme/majorSchemaCustomize/queryStudentGraduationCredit` | 只表示毕业要求，不推算已获学分 |
+| 毕业学分要求 | `scheme/majorSchemaCustomize/queryStudentGraduationCredit` | 与成绩所得分开；后者来自成绩的实际所得字段 |
 
 `#/jwxt/js/student/index` 是浏览器 Hash 路由，不作为服务器 API 请求。学校返回登录 HTML、302、身份不匹配、重复分页或缺页时不写成功缓存。官方确认的零条记录与请求失败分别显示。通知、请假等尚未验证模块保留官方入口，不填入假数据。
 
-`ScvtcRuntime` 协调身份、学期、同步与 Room 写入。课表与服务结果按账号及学期隔离；只有完整校验后的新结果才能替换对应缓存。
+`ScvtcRuntime` 协调身份、学期、同步与 Room 写入。课表与服务结果按账号及学期隔离；只有完整校验后的新结果才能替换对应缓存。服务 JSON 使用账号/学期/模块关联的 AES-GCM，旧明文记录只兼容读取，成功同步后加密替换。
+
+`Models.kt` 的本校 UI 白名单与 API 能力目录分开：只显示课表、成绩、学分，搜索使用同一白名单。其余业务由 `ScvtcWebActivity` / `ScvtcWebSession` 承载学校官网；WebView 负责 SSO 和真实网页操作，本地数据仍通过原生 HTTP 获取。`scvtc-capture.js` 只观察身份与学期 JSON，并保留官网 `window.open`，不解析 HTML 冒充业务 API。
+
+同步状态由 `NativeSyncState` 驱动，右上角刷新复用协调器；失败不更新成功时间。壁纸采用独立清晰/柔化文件，完成 EXIF、模糊和色调处理后原子激活；旧版壁纸与失败回退兼容。卡片与底栏沿用原版完整 Backdrop、模糊与折射链路；本轮低分辨率卡片替代方案已经撤回。效果参数仍由用户手动选择，不按机型自动降级。
+
+`CampusCompanion` 将五张原创表情以后台解码、2 MiB LRU 保存；生命周期达到 STARTED 且允许动画才切换待机。角色状态、尺寸和显隐沿用既有偏好键。
 
 ## 构建
 
@@ -44,3 +50,5 @@ App 优先恢复本地 Session，失效后尝试 SSO，再必要时使用本机�
 ```
 
 Windows 使用 `gradlew.bat`，内存较小时加 `--max-workers=1`。发布配置和原签名保存在仓库外；覆盖安装要求 applicationId、原证书与 versionCode 符合升级条件。最终检查 APK SHA-256、证书、ZIP 完整性、16 KiB 对齐和源码对应关系。更新元数据签名与 APK 原签名分别验证。编译通过不等于完成真机验收。
+
+赞赏原图由仓库外 `SCVTC_DONATION_PNG` 输入；未配置的公开源码不含私人支付图。图标、角色和提示词见 [BRANDING_20261009.md](BRANDING_20261009.md)。

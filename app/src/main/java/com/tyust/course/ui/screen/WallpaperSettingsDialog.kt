@@ -312,6 +312,16 @@ fun WallpaperSettingsDialog(onDismiss: () -> Unit) {
                                 )
                             )
                         }
+                        ColorSliderRow(label="裁剪 · 水平位置") {
+                            LiquidSlider(value={manager.imageFocusX},onValueChange={manager.updateImageCrop(focusX=it)},valueRange=0f..1f,trackBrush=Brush.horizontalGradient(listOf(Color(0xFF007AFF),Color(0xFF90CAFF))))
+                        }
+                        ColorSliderRow(label="裁剪 · 垂直位置") {
+                            LiquidSlider(value={manager.imageFocusY},onValueChange={manager.updateImageCrop(focusY=it)},valueRange=0f..1f,trackBrush=Brush.horizontalGradient(listOf(Color(0xFF007AFF),Color(0xFF90CAFF))))
+                        }
+                        ColorSliderRow(label="裁剪 · 等比缩放") {
+                            LiquidSlider(value={manager.imageZoom},onValueChange={manager.updateImageCrop(zoom=it)},valueRange=1f..3f,trackBrush=Brush.horizontalGradient(listOf(Color(0xFF007AFF),Color(0xFF90CAFF))))
+                        }
+                        SystemSecondaryButton(text="恢复居中裁剪",onClick={manager.updateImageCrop(0.5f,0.5f,1f,persist=true)})
 
                         ColorSliderRow(label = "模糊") {
                             LiquidSlider(

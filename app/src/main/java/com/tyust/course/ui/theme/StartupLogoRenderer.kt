@@ -2,8 +2,9 @@ package com.tyust.course.ui.theme
 
 import android.content.Context
 import android.graphics.Canvas
+import android.graphics.BitmapFactory
+import android.graphics.drawable.BitmapDrawable
 import android.graphics.Color
-import android.graphics.Matrix
 import android.graphics.Paint
 import android.graphics.Path
 import android.graphics.PathMeasure
@@ -14,16 +15,18 @@ import com.tyust.course.R
 import kotlin.math.PI
 import kotlin.math.sin
 
-/** Native splash and application overlay use the same safe-area vectors. */
+/** Native splash and application overlay keep the original card choreography. */
 class StartupLogoRenderer(context: Context) {
-    private val cap = requireNotNull(ContextCompat.getDrawable(context, R.drawable.ic_startup_cap)).mutate()
-    private val bolt = requireNotNull(ContextCompat.getDrawable(context, R.drawable.ic_startup_bolt)).mutate()
+    private val cap = BitmapDrawable(context.resources, requireNotNull(BitmapFactory.decodeResource(
+        context.resources, R.drawable.campus_icon_portrait,
+        BitmapFactory.Options().apply { inSampleSize = 4; inScaled = false }
+    )))
+    private val bolt = requireNotNull(ContextCompat.getDrawable(context, R.drawable.campus_startup_accent)).mutate()
+    private val portraitMask = Path()
     private val paint = Paint(Paint.ANTI_ALIAS_FLAG)
     private val boltPath = requireNotNull(PathParser.createPathFromPathData(
-        "M704,172 L454,449 L413,496 L372,540 L363,552 L364,560 L370,565 L493,565 L495,567 L480,602 L470,621 L462,641 L391,793 L388,802 L378,821 L364,855 L479,729 L493,712 L660,528 L675,510 L691,494 L695,488 L695,480 L691,475 L686,473 L565,473 L564,469 Z"
-    )).apply {
-        transform(Matrix().apply { setScale(StartupChoreography.SafeScale, StartupChoreography.SafeScale, 512f, 512f) })
-    }
+        "M764,431 L855,399 M781,496 L868,463"
+    ))
     private val boltMeasure = PathMeasure(boltPath, false)
     private val trace = Path()
     private val colors = intArrayOf(0xFF219EF0.toInt(), 0xFF29ACDE.toInt(), 0xFF29BBC5.toInt(),
@@ -38,10 +41,13 @@ class StartupLogoRenderer(context: Context) {
         canvas.scale(scale, scale, bounds.exactCenterX(), bounds.exactCenterY())
         cap.bounds = bounds
         bolt.bounds = bounds
+        portraitMask.reset()
+        portraitMask.addRoundRect(bounds.left.toFloat(), bounds.top.toFloat(), bounds.right.toFloat(),
+            bounds.bottom.toFloat(), bounds.width() * .24f, bounds.height() * .24f, Path.Direction.CW)
         val unit = bounds.width() / 1024f
         if (milliseconds <= 0f || milliseconds >= 650f) {
             cap.alpha = alpha
-            cap.draw(canvas)
+            drawPortrait(canvas)
         } else repeat(6) { index ->
             val frame = StartupChoreography.card(milliseconds, index)
             val left = bounds.left + (218f + (index % 3) * 196f) * unit
@@ -56,7 +62,7 @@ class StartupLogoRenderer(context: Context) {
             canvas.save()
             canvas.clipRect(left, top, right, bottom)
             cap.alpha = (alpha * (1f - frame.cardAmount)).toInt()
-            cap.draw(canvas)
+            drawPortrait(canvas)
             canvas.restore()
             paint.style = Paint.Style.FILL
             paint.color = colors[index]
@@ -81,7 +87,7 @@ class StartupLogoRenderer(context: Context) {
             paint.style = Paint.Style.FILL
             paint.color = 0xFF33D29C.toInt()
             paint.alpha = (sin(reveal * PI.toFloat()) * 28f).toInt().coerceIn(0, 28)
-            canvas.drawCircle(530f, 500f, 125f + 45f * reveal, paint)
+            canvas.drawCircle(812f, 445f, 62f + 18f * reveal, paint)
             trace.reset()
             boltMeasure.getSegment(0f, boltMeasure.length * reveal, trace, true)
             paint.alpha = (alpha * sin(reveal * PI.toFloat())).toInt().coerceIn(0, 255)
@@ -93,6 +99,13 @@ class StartupLogoRenderer(context: Context) {
         }
         bolt.alpha = (alpha * reveal * reveal).toInt()
         bolt.draw(canvas)
+        canvas.restore()
+    }
+
+    private fun drawPortrait(canvas: Canvas) {
+        canvas.save()
+        canvas.clipPath(portraitMask)
+        cap.draw(canvas)
         canvas.restore()
     }
 }

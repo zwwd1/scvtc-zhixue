@@ -34,6 +34,12 @@ data class ThemeState(
   val reduceMotion: Boolean = false,
   val style: VisualStyle = VisualStyle.ZHENGFANG,
   val collapseDock: Boolean = true,
+  val courseCardBlur:Float=6f,
+  val courseCardOpacity:Float=0.78f,
+  val courseMaterial:Int=0,
+  val courseRadius:Float=12f,
+  val courseHighlight:Float=.35f,
+  val courseMotion:Float=1f,
 ) {
   fun effectiveDark(system: Boolean) =
     when (mode) {

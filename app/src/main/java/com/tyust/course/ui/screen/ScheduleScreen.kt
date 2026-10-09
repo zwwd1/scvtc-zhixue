@@ -611,11 +611,12 @@ private fun timetableEntries(courses: List<ScheduleCourseUi>): List<TimetableEnt
 
 @Composable
 fun CourseCard(course: ScheduleCourseUi, onLongClick: () -> Unit = {}, onClick: () -> Unit) {
-    val style=com.tyust.course.scvtc.NextAppearance.theme.style
+    val appearance=com.tyust.course.scvtc.NextAppearance.theme
+    val style=appearance.style
     val glassEnabled=com.tyust.course.manager.AppearanceSettingsManager.glassEffectEnabled
     val motion=com.tyust.course.ui.system.rememberGlassAccessibilityMode()
     val backdrop=LocalControlBackdrop.current
-    val shape=RoundedCornerShape(when(style){cn.scvtc.campus.VisualStyle.CLASSIC->5.dp;cn.scvtc.campus.VisualStyle.SLEEPDOWN->20.dp;else->12.dp})
+    val shape=RoundedCornerShape(appearance.courseRadius.coerceIn(4f,24f).dp)
     val darkCard = com.tyust.course.ui.system.rememberGlassDarkTheme()
     val focusRequester = remember { FocusRequester() }
     val focusRegistry = LocalScheduleFocus.current
@@ -635,7 +636,7 @@ fun CourseCard(course: ScheduleCourseUi, onLongClick: () -> Unit = {}, onClick: 
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
     val scale by animateFloatAsState(
-        targetValue = if (isPressed && !com.tyust.course.ui.system.rememberGlassAccessibilityMode().reduceMotion) 0.97f else 1f,
+        targetValue = if (isPressed && !motion.reduceMotion) 1f-.03f*appearance.courseMotion.coerceIn(0f,1f) else 1f,
         animationSpec = if(motion.reduceMotion)androidx.compose.animation.core.snap() else when(style){
             cn.scvtc.campus.VisualStyle.SLEEPDOWN->androidx.compose.animation.core.spring(.78f,340f)
             cn.scvtc.campus.VisualStyle.CLASSIC->androidx.compose.animation.core.spring(1f,700f)
@@ -658,8 +659,8 @@ fun CourseCard(course: ScheduleCourseUi, onLongClick: () -> Unit = {}, onClick: 
                     if (unknownWeeks) "周次待核对" else null).joinToString("，")
             }
             .scale(scale)
-            .then(if(glassEnabled && style!=cn.scvtc.campus.VisualStyle.CLASSIC && backdrop!=null && isBackdropSupported())Modifier.drawBackdrop(
-                backdrop=backdrop,shape={shape},effects={vibrancy();blur(if(style==cn.scvtc.campus.VisualStyle.SLEEPDOWN)8.dp.toPx()else 4.dp.toPx());lens(4.dp.toPx(),2.dp.toPx())}
+            .then(if(glassEnabled && appearance.courseMaterial!=2 && backdrop!=null && isBackdropSupported())Modifier.drawBackdrop(
+                backdrop=backdrop,shape={shape},effects={vibrancy();blur(appearance.courseCardBlur.dp.toPx());if(appearance.courseMaterial==0)lens(4.dp.toPx(),2.dp.toPx())}
             )else Modifier)
             .combinedClickable(
                 interactionSource = interactionSource,
@@ -675,7 +676,7 @@ fun CourseCard(course: ScheduleCourseUi, onLongClick: () -> Unit = {}, onClick: 
                 }
             ),
         shape = shape,
-        color = containerColor.copy(alpha=if(!glassEnabled || style==cn.scvtc.campus.VisualStyle.CLASSIC)1f else if(darkCard).94f else .90f),
+        color = containerColor.copy(alpha=appearance.courseCardOpacity.coerceIn(.55f,1f)),
         contentColor = MaterialTheme.colorScheme.onSurface,
         border = scheduleCardBorder(course.color, course.isCurrent || course.isNext)
     ) {
@@ -688,7 +689,7 @@ fun CourseCard(course: ScheduleCourseUi, onLongClick: () -> Unit = {}, onClick: 
                     .background(
                         Brush.verticalGradient(
                             colors = listOf(
-                                Color.White.copy(alpha = if (darkCard) 0.08f else 0.35f),
+                                Color.White.copy(alpha = appearance.courseHighlight.coerceIn(0f,.6f)*if(darkCard).3f else 1f),
                                 Color.White.copy(alpha = if (darkCard) 0.02f else 0.05f),
                                 Color.Transparent
                             )

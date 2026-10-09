@@ -121,6 +121,9 @@ object School {
       CampusService("password", "修改密码", "账号服务", true),
     )
 
+  // Presentation policy only; retained protocols and caches remain available.
+  val visiblePrimaryServiceIds = setOf("schedule", "grades", "credits")
+
   fun service(id: String) = services.firstOrNull { it.id == id }
 
   fun trusted(url: String): Boolean =

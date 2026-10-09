@@ -1,5 +1,7 @@
 package com.tyust.course.ui.screen
 
+import androidx.compose.runtime.collectAsState
+
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -97,6 +99,7 @@ fun WeekHeaderCompact(
     now: Long = System.currentTimeMillis()
 ) {
     var calendarOpen by remember { mutableStateOf(false) }
+    val sync by com.tyust.course.scvtc.ScvtcRuntime.syncState.collectAsState()
     val focus = remember { FocusRequester() }
     val registry = LocalScheduleFocus.current
     DisposableEffect(registry, focus) {
@@ -139,7 +142,7 @@ fun WeekHeaderCompact(
         CompositionLocalProvider(LocalControlBackdrop provides controlBackdrop, LocalGlassLensAnchor provides headerLens) {
         Column(Modifier.fillMaxWidth().statusBarsPadding()) {
             Row(Modifier.fillMaxWidth().height(actionHeight).padding(horizontal = 16.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f).heightIn(min = 48.dp).testTag("schedule-header-title").focusRequester(focus)
                     .clip(RoundedCornerShape(14.dp)).clickable(role = Role.Button) { calendarOpen = true }
                     .semantics { contentDescription = "选择日期与学期" }.padding(start = 4.dp),
@@ -164,12 +167,19 @@ fun WeekHeaderCompact(
                     if (weekStatus != null) Text(weekStatus, Modifier.testTag("schedule-header-week"),
                         style = weekStyle, color = appearance.onSurfaceVariant)
                     else ScheduleWeekLabel(currentWeek, isNextSemester, weekStyle, appearance.onSurfaceVariant)
+                    if(com.tyust.course.manager.UserManager.getInstance().currentSchool?.id=="scvtc")Text(
+                        sync.label,
+                        Modifier.testTag("schedule-sync-status").clickable { if(!sync.busy)onSyncClick() },
+                        fontSize=10.sp,lineHeight=12.sp,color=appearance.onSurfaceVariant,
+                        maxLines=1,overflow=androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                    )
                 }
-                Row(Modifier.testTag("schedule-header-actions"), horizontalArrangement = Arrangement.spacedBy(6.dp),
+                cn.scvtc.campus.CampusCompanionSlot(reduceMotion=com.tyust.course.scvtc.NextAppearance.theme.reduceMotion || !android.animation.ValueAnimator.areAnimatorsEnabled(),working=sync.busy)
+                Row(Modifier.testTag("schedule-header-actions"), horizontalArrangement = Arrangement.spacedBy(2.dp),
                     verticalAlignment = Alignment.CenterVertically) {
                     ScheduleViewToggle(dayView, onDayView, controlBackdrop)
                     SystemActionMenu("更多课表操作", listOf(
-                        SystemMenuAction("同步课表", Icons.Outlined.Refresh, onSyncClick),
+                        SystemMenuAction(if(sync.busy)"正在同步…"else"同步课表", Icons.Outlined.Refresh, {if(!sync.busy)onSyncClick()}),
                         SystemMenuAction("导出课表", Icons.Outlined.Share, onExportClick),
                         SystemMenuAction("添加课程", Icons.Outlined.Add, onAddClick),
                         SystemMenuAction("桌面组件", Icons.Outlined.Widgets, onWidgetClick),
@@ -183,6 +193,16 @@ fun WeekHeaderCompact(
                             }
                         }
                     })
+                    Box(Modifier.size(44.dp), contentAlignment = Alignment.Center) {
+                        LiquidButton(onClick = { if(!sync.busy)onSyncClick() }, enabled = !sync.busy,
+                            backdrop = controlBackdrop, modifier = Modifier.size(40.dp).testTag("schedule-refresh"),
+                            minHeight = 40.dp, horizontalPadding = 0.dp) {
+                            AnimatedLineIcon(AnimatedIconSpec.Refresh, Modifier.size(21.dp),
+                                state = if(sync.busy)IconVisualState.Running else IconVisualState.Idle,
+                                description = if(sync.busy)"正在同步课表" else "刷新课表",
+                                tint = appearance.onSurface)
+                        }
+                    }
                 }
             }
             Row(Modifier.fillMaxWidth().height(height - actionHeight).padding(horizontal = scheduleGridPadding()),

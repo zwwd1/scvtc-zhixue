@@ -37,10 +37,21 @@ object NextAppearance {
  var theme by mutableStateOf(ThemeState(style=VisualStyle.ZHENGFANG));private set
  var dockStyle by mutableIntStateOf(0);private set
  private var initialized=false
+ private val persistenceScope=kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.SupervisorJob()+kotlinx.coroutines.Dispatchers.Main.immediate)
+ private var persistence:Job?=null
+ private fun persistTheme(){
+  persistence?.cancel()
+  persistence=persistenceScope.launch{delay(240);ScvtcRuntime.context.getSharedPreferences("next_appearance",0).edit().putString("theme",ScvtcRuntime.json.encodeToString(theme)).apply()}
+ }
  fun updateDockStyle(value:Int){dockStyle=value;ScvtcRuntime.context.getSharedPreferences("next_appearance",0).edit().putInt("dockStyle",value).apply()}
  fun initialize(){val p=ScvtcRuntime.context.getSharedPreferences("next_appearance",0);dockStyle=p.getInt("dockStyle",0);theme=p.getString("theme",null)?.let{runCatching{ScvtcRuntime.json.decodeFromString<ThemeState>(it)}.getOrNull()}?:ThemeState(style=VisualStyle.ZHENGFANG);initialized=true;theme=theme.copy(mode=when(AppearanceSettingsManager.themeMode){AppThemeMode.System->ThemeMode.SYSTEM;AppThemeMode.Light->ThemeMode.LIGHT;AppThemeMode.Dark->ThemeMode.DARK});p.edit().putString("theme",ScvtcRuntime.json.encodeToString(theme)).apply()}
  fun receiveMode(value:AppThemeMode){if(!initialized)return;val mode=when(value){AppThemeMode.System->ThemeMode.SYSTEM;AppThemeMode.Light->ThemeMode.LIGHT;AppThemeMode.Dark->ThemeMode.DARK};if(theme.mode!=mode){theme=theme.copy(mode=mode);runCatching{ScvtcRuntime.context.getSharedPreferences("next_appearance",0).edit().putString("theme",ScvtcRuntime.json.encodeToString(theme)).apply()}}}
- fun update(t:ThemeState){val previous=theme;theme=t;ScvtcRuntime.context.getSharedPreferences("next_appearance",0).edit().putString("theme",ScvtcRuntime.json.encodeToString(t)).apply();AppearanceSettingsManager.updateThemeMode(when(t.mode){ThemeMode.SYSTEM->AppThemeMode.System;ThemeMode.LIGHT->AppThemeMode.Light;ThemeMode.DARK->AppThemeMode.Dark});if(t.ui!=previous.ui || t.style!=previous.style)AppearanceSettingsManager.updateGlassEffect(t.ui==UiSystem.MIUIX && t.style!=VisualStyle.CLASSIC)}
+ fun update(t:ThemeState){
+  val previous=theme;if(previous==t)return
+  theme=t;persistTheme()
+  if(t.mode!=previous.mode)AppearanceSettingsManager.updateThemeMode(when(t.mode){ThemeMode.SYSTEM->AppThemeMode.System;ThemeMode.LIGHT->AppThemeMode.Light;ThemeMode.DARK->AppThemeMode.Dark})
+  if(t.ui!=previous.ui || t.style!=previous.style)AppearanceSettingsManager.updateGlassEffect(t.ui==UiSystem.MIUIX && t.style!=VisualStyle.CLASSIC)
+ }
 }
 @Composable fun NextTheme(content: @Composable () -> Unit) {
  val t=NextAppearance.theme

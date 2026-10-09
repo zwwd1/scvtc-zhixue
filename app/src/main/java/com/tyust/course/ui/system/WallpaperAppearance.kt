@@ -107,14 +107,14 @@ fun rememberWallpaperRegionAppearance(
         viewportHeight,
         region,
         style.imageBlur,
-        style.imageDim
+        style.imageDim,style.imageFocusX,style.imageFocusY,style.imageZoom
     ) {
         toneMap.resolve(
             viewportWidth = viewportWidth,
             viewportHeight = viewportHeight,
             region = region,
             blur = style.imageBlur,
-            dim = style.imageDim
+            dim = style.imageDim,focusX=style.imageFocusX,focusY=style.imageFocusY,zoom=style.imageZoom
         )
     }
 

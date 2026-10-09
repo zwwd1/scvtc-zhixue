@@ -136,7 +136,7 @@ fun OnboardingScreen(
                 // 高度恒定：最后一页藏掉「跳过」时不能让下面整块跳一下
                 Box(modifier = Modifier.fillMaxWidth().height(44.dp)) {
                     androidx.compose.foundation.Image(
-                        painter = androidx.compose.ui.res.painterResource(com.tyust.course.R.mipmap.ic_launcher),
+                        painter = androidx.compose.ui.res.painterResource(com.tyust.course.R.drawable.campus_icon_portrait),
                         contentDescription = androidx.compose.ui.res.stringResource(com.tyust.course.R.string.app_name),
                         modifier = Modifier.size(40.dp).align(Alignment.CenterStart)
                     )

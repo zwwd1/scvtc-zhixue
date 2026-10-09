@@ -16,59 +16,142 @@ import kotlinx.coroutines.channels.Channel
 import org.json.JSONObject
 import java.lang.ref.WeakReference
 
-/** Application-owned session; persistent work can restore SSO without an Activity. */
+/** Application-owned official browser; native HTTP owns all student-data reads. */
 object ScvtcWebSession {
  var foreground=WeakReference<FragmentActivity>(null)
  var web:WebView?=null;private set
  var controller:ScvtcCapture?=null;private set
- private var hidden:FrameLayout?=null
+ val page=kotlinx.coroutines.flow.MutableStateFlow(OfficialWebPage())
+ var fileChooser:((ValueCallback<Array<Uri>>,WebChromeClient.FileChooserParams)->Boolean)?=null
+ private var popup:android.app.Dialog?=null
+ private var popupWeb:WebView?=null
+ private var captureScript=""
+
  @SuppressLint("SetJavaScriptEnabled")
- fun obtain(activity:FragmentActivity):WebView = obtainContext(activity)
- private fun obtainContext(context:Context):WebView {
-  web?.let{if(controller?.visible!=true)(it.context as MutableContextWrapper).baseContext=context;return it}
-  val view=WebView(MutableContextWrapper(context));web=view
-  view.settings.javaScriptEnabled=true;view.settings.domStorageEnabled=true;view.settings.setSupportMultipleWindows(false)
-  view.settings.mixedContentMode=WebSettings.MIXED_CONTENT_NEVER_ALLOW
-  CookieManager.getInstance().setAcceptCookie(true);CookieManager.getInstance().setAcceptThirdPartyCookies(view,true)
-  val c=ScvtcCapture(view);c.visible=context is FragmentActivity;controller=c
-  val login=cn.scvtc.campus.OfficialLoginMemory(ScvtcRuntime.context);c.loginMemory=login;login.install(view){ScvtcRuntime.account}
-  if(!WebViewFeature.isFeatureSupported(WebViewFeature.WEB_MESSAGE_LISTENER)){ScvtcRuntime.status.value="系统 WebView 需要更新才能读取课表";return view}
-  WebViewCompat.addWebMessageListener(view,"CampusBridge",setOf(School.ORIGIN)){_,message,origin,main,_ ->if(main && origin.toString().trimEnd('/')==School.ORIGIN)c.receive(message.data.orEmpty())}
-  val script=context.assets.open("scvtc-capture.js").bufferedReader().use{it.readText()}
-  val early=WebViewFeature.isFeatureSupported(WebViewFeature.DOCUMENT_START_SCRIPT)
-  if(early)WebViewCompat.addDocumentStartJavaScript(view,script,setOf(School.ORIGIN))
-  view.webViewClient=object:WebViewClient(){
-   override fun onPageStarted(v:WebView,url:String?,icon:android.graphics.Bitmap?){c.resetDocument()}
-   override fun shouldOverrideUrlLoading(v:WebView,r:WebResourceRequest):Boolean {
-    if(r.url.scheme in setOf("https","http"))return false
-    runCatching{v.context.startActivity(Intent(Intent.ACTION_VIEW,r.url))};return true
-   }
-   override fun onPageFinished(v:WebView,url:String){
-    login.prepare(v)
-    val callback=Uri.parse(url)
-    if(callback.scheme=="https"&&callback.host=="www.shulin-soft.com"&&callback.port==8267&&callback.path=="/casLogin.html"){
-      v.loadUrl(cn.scvtc.campus.CasAuthManager.JWXT_SSO_ENTRY);return
-    }
-    if(login.recoveryNavigation(v,ScvtcRuntime.account,url))return
-    if(Uri.parse(url).host=="jwxt.scvtc.edu.cn"){if(!early)v.evaluateJavascript(script,null);if(c.module=="schedule")v.evaluateJavascript("window.__scvtc?.inspectReady()",null)
-      else {val labels=org.json.JSONArray(listOf(School.service(c.module)?.title.orEmpty())+School.service(c.module)?.aliases.orEmpty());v.evaluateJavascript("window.__scvtc?.openModule(${JSONObject.quote(c.module)},$labels)",null)}}
-    else if(Uri.parse(url).host=="cas.scvtc.edu.cn")v.postDelayed({
-      if(v.url==url)v.evaluateJavascript("!!document.querySelector('input[type=password]')") { result ->
-        if(result=="true")login.recover(v,ScvtcRuntime.account){restored->if(!restored){if(ScvtcRuntime.account.isBlank())ScvtcRuntime.status.value="请完成一次官方登录，身份确认后会自动读取数据"else c.fail("学校需要补充认证，请在官方页面完成；离线课表保留")}}
-      }
-    },2500)
-    CookieManager.getInstance().flush()
-   }
-   override fun onReceivedError(v:WebView,r:WebResourceRequest,e:WebResourceError){if(r.isForMainFrame){login.failedNetwork(ScvtcRuntime.account);c.fail("官方网页连接失败（${e.errorCode}），离线课表保留")}}
+ fun obtain(activity:FragmentActivity,initialUrl:String?=null):WebView {
+  web?.let {
+   if(controller?.visible!=true)(it.context as MutableContextWrapper).baseContext=activity
+   if(initialUrl!=null&&initialUrl!=it.url)navigate(initialUrl)
+   return it
   }
-  view.webChromeClient=WebChromeClient()
-  view.settings.allowFileAccess=false;view.settings.allowContentAccess=false
-  view.loadUrl(School.HOME)
+  val view=WebView(MutableContextWrapper(activity));web=view
+  val c=ScvtcCapture(view);controller=c
+  captureScript=activity.assets.open("scvtc-capture.js").bufferedReader().use{it.readText()}
+  configure(view,c)
+  view.loadUrl(initialUrl?.takeIf(OfficialWebNavigation::trusted)?:School.HOME)
   return view
  }
- fun attachVisible(activity:FragmentActivity,container:FrameLayout){val w=obtain(activity);(w.context as MutableContextWrapper).baseContext=activity;(w.parent as? android.view.ViewGroup)?.removeView(w);container.addView(w,FrameLayout.LayoutParams(-1,-1));controller?.visible=true}
- fun detachVisible(activity:FragmentActivity){if((web?.context as? MutableContextWrapper)?.baseContext!==activity)return;controller?.visible=false;web?.let{(it.parent as? android.view.ViewGroup)?.removeView(it);(it.context as MutableContextWrapper).baseContext=ScvtcRuntime.context};ScvtcSyncWork.enqueue(ScvtcRuntime.context)}
- fun close(){controller?.dispose();controller=null;web?.let{(it.parent as? android.view.ViewGroup)?.removeView(it);it.destroy()};web=null;hidden?.let{(it.parent as? android.view.ViewGroup)?.removeView(it)};hidden=null}
+ fun observedPage(view:WebView,url:String,title:String=""){
+  if(view.url!=url||!OfficialWebNavigation.trusted(url))return
+  page.value=OfficialWebPage(OfficialWebNavigation.title(url,title),url)
+ }
+ @SuppressLint("SetJavaScriptEnabled")
+ private fun configure(view:WebView,capture:ScvtcCapture?){
+  view.settings.apply{
+   javaScriptEnabled=true;domStorageEnabled=true
+   setSupportMultipleWindows(true);javaScriptCanOpenWindowsAutomatically=false
+   setSupportZoom(true);builtInZoomControls=true;displayZoomControls=false
+   useWideViewPort=true;loadWithOverviewMode=true
+   mixedContentMode=WebSettings.MIXED_CONTENT_NEVER_ALLOW
+   allowFileAccess=false;allowContentAccess=false
+  }
+  CookieManager.getInstance().setAcceptCookie(true)
+  CookieManager.getInstance().setAcceptThirdPartyCookies(view,true)
+  val login=cn.scvtc.campus.OfficialLoginMemory(ScvtcRuntime.context)
+  capture?.loginMemory=login
+  login.install(view){ScvtcRuntime.account}
+  val messages=WebViewFeature.isFeatureSupported(WebViewFeature.WEB_MESSAGE_LISTENER)
+  val early=messages&&WebViewFeature.isFeatureSupported(WebViewFeature.DOCUMENT_START_SCRIPT)
+  if(messages)WebViewCompat.addWebMessageListener(view,"CampusBridge",setOf(School.ORIGIN)){_,message,origin,main,_ ->
+   if(main&&origin.toString().trimEnd('/')==School.ORIGIN){
+    val text=message.data.orEmpty()
+    if(capture!=null)capture.receive(text)
+    else runCatching{JSONObject(text)}.getOrNull()?.takeIf{it.optString("kind")=="navigation"}?.let{observedPage(view,it.optString("page"),it.optString("title"))}
+   }
+  }
+  if(early)WebViewCompat.addDocumentStartJavaScript(view,captureScript,setOf(School.ORIGIN))
+  view.webViewClient=object:WebViewClient(){
+   override fun onPageStarted(v:WebView,url:String?,icon:android.graphics.Bitmap?){
+    capture?.resetDocument()
+    page.value=OfficialWebPage(OfficialWebNavigation.title(url.orEmpty()),url.orEmpty(),loading=true)
+   }
+   override fun shouldOverrideUrlLoading(v:WebView,r:WebResourceRequest):Boolean{
+    val url=r.url.toString()
+    if(url=="about:blank"||OfficialWebNavigation.trusted(url))return false
+    if(r.isForMainFrame){external(v,url);if(v===popupWeb)popup?.dismiss()}
+    return true
+   }
+   override fun onPageFinished(v:WebView,url:String){
+    observedPage(v,url,v.title.orEmpty())
+    login.prepare(v)
+    val u=Uri.parse(url)
+    if(u.scheme=="https"&&u.host=="www.shulin-soft.com"&&u.port==8267&&u.path=="/casLogin.html"){
+     v.loadUrl(cn.scvtc.campus.CasAuthManager.JWXT_SSO_ENTRY);return
+    }
+    if(login.recoveryNavigation(v,ScvtcRuntime.account,url))return
+    if(u.host=="jwxt.scvtc.edu.cn"){
+     if(messages&&!early)v.evaluateJavascript(captureScript,null)
+     v.evaluateJavascript("window.__scvtc?.inspectReady()",null)
+    }else if(u.host=="cas.scvtc.edu.cn"&&ScvtcRuntime.account.isNotBlank()){
+     v.postDelayed({
+      if(v.url==url)v.evaluateJavascript("!!document.querySelector('input[type=password]')"){result->
+       if(result=="true")login.recover(v,ScvtcRuntime.account){restored->if(!restored)page.value=page.value.copy(error="请在学校官方页面完成补充认证")}
+      }
+     },2500)
+    }
+    CookieManager.getInstance().flush()
+   }
+   override fun onReceivedError(v:WebView,r:WebResourceRequest,e:WebResourceError){
+    if(r.isForMainFrame){login.failedNetwork(ScvtcRuntime.account);page.value=page.value.copy(loading=false,error="官方页面连接失败（${e.errorCode}）；可刷新或用系统浏览器打开")}
+   }
+   override fun onReceivedHttpError(v:WebView,r:WebResourceRequest,response:WebResourceResponse){
+    if(r.isForMainFrame&&response.statusCode>=400)page.value=page.value.copy(loading=false,error="官方页面返回 HTTP ${response.statusCode}")
+   }
+  }
+  view.webChromeClient=object:WebChromeClient(){
+   override fun onReceivedTitle(v:WebView,title:String?){observedPage(v,v.url.orEmpty(),title.orEmpty())}
+   override fun onCreateWindow(v:WebView,isDialog:Boolean,isUserGesture:Boolean,resultMsg:android.os.Message):Boolean{
+    val activity=(v.context as? MutableContextWrapper)?.baseContext as? FragmentActivity?:return false
+    if(!isUserGesture)return false
+    popup?.dismiss()
+    val child=WebView(MutableContextWrapper(activity));popupWeb=child
+    configure(child,null)
+    val dialog=android.app.Dialog(activity);popup=dialog
+    val layout=android.widget.LinearLayout(activity).apply{orientation=android.widget.LinearLayout.VERTICAL}
+    layout.addView(android.widget.Button(activity).apply{text="关闭官网新窗口";setOnClickListener{dialog.dismiss()}})
+    layout.addView(child,android.widget.LinearLayout.LayoutParams(-1,0,1f))
+    dialog.setContentView(layout)
+    dialog.setOnDismissListener{
+     child.stopLoading();child.destroy()
+     if(popup===dialog){popup=null;popupWeb=null;web?.let{observedPage(it,it.url.orEmpty(),it.title.orEmpty())}}
+    }
+    dialog.show();dialog.window?.setLayout(-1,-1)
+    (resultMsg.obj as WebView.WebViewTransport).webView=child
+    resultMsg.sendToTarget()
+    return true
+   }
+   override fun onCloseWindow(window:WebView){if(window===popupWeb)popup?.dismiss()}
+   override fun onShowFileChooser(v:WebView,callback:ValueCallback<Array<Uri>>,parameters:FileChooserParams):Boolean =
+    fileChooser?.invoke(callback,parameters)?:false
+  }
+ }
+ fun navigate(url:String){
+  val view=web?:return
+  if(OfficialWebNavigation.trusted(url))view.loadUrl(url)else external(view,url)
+ }
+ fun external(view:WebView,url:String){runCatching{view.context.startActivity(Intent(Intent.ACTION_VIEW,Uri.parse(url)))}.onFailure{page.value=page.value.copy(error="未能打开目标服务：系统没有可用的浏览器或应用")}}
+ fun attachVisible(activity:FragmentActivity,container:FrameLayout){
+  val w=obtain(activity);(w.context as MutableContextWrapper).baseContext=activity
+  (w.parent as? android.view.ViewGroup)?.removeView(w)
+  container.addView(w,FrameLayout.LayoutParams(-1,-1));controller?.visible=true;foreground=WeakReference(activity);w.onResume()
+ }
+ fun detachVisible(activity:FragmentActivity){
+  if((web?.context as? MutableContextWrapper)?.baseContext!==activity)return
+  popup?.dismiss();fileChooser=null;foreground=WeakReference(null);controller?.visible=false
+  web?.let{it.onPause();(it.parent as? android.view.ViewGroup)?.removeView(it);(it.context as MutableContextWrapper).baseContext=ScvtcRuntime.context}
+  ScvtcSyncWork.enqueue(ScvtcRuntime.context)
+ }
+ fun close(){popup?.dismiss();controller?.dispose();controller=null;web?.let{(it.parent as? android.view.ViewGroup)?.removeView(it);it.destroy()};web=null;page.value=OfficialWebPage()}
 }
 /** Observes authenticated JSON identity and semester responses only. WebView
  * establishes SSO; ScvtcRuntime performs every data read through native HTTP. */
@@ -117,6 +200,7 @@ class ScvtcCapture(private val web:WebView){
   val page=m.optString("page")
   if(Uri.parse(page).scheme!="https"||Uri.parse(page).host!="jwxt.scvtc.edu.cn"||web.url!=page)return
   val kind=m.optString("kind");val epoch=m.optString("generation")
+  if(kind=="navigation"){ScvtcWebSession.observedPage(web,page,m.optString("title"));return}
   if(kind=="hello"){
    val doc=m.optString("documentId");if(doc.isBlank()||doc!=documentId){verifiedAccount="";officialMonday=null;detectedName=""}
    documentId=doc;generation=epoch;return

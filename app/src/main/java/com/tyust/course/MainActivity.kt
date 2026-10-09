@@ -261,7 +261,7 @@ fun MainScreen(fragmentActivity: FragmentActivity) {
     val items = remember(pageRevision) { PluginPages.registry.pinned().mapNotNull { route ->
         BottomNavItem.entries.firstOrNull { it.route == route } ?: PluginPages.registry.page(route)?.let { BottomNavItem.Extension(it.id, it.title) }
     } }
-    
+
     val hasStarred = prefs.getBoolean("has_starred", false)
     val dismissCount = prefs.getInt("star_dismiss_count", 0)
     val shouldShowStarDialog = false
@@ -642,7 +642,7 @@ fun MainScreen(fragmentActivity: FragmentActivity) {
                                         onSurveyCenter = { initialSurveyId = null; showSurveyCenter = true },
                                         surveyUnreadCount = surveyFeed.unreadCount(System.currentTimeMillis())
                                     )
-                                    "app.services" -> com.tyust.course.scvtc.NextServices(official={fragmentActivity.startActivity(Intent(fragmentActivity,com.tyust.course.scvtc.ScvtcWebActivity::class.java))})
+                                    "app.services" -> com.tyust.course.scvtc.NextServices(official={openPage("app.schedule")})
                                     else -> com.tyust.course.academic.plugin.PluginPageContent(route, onNavigate = { next, params -> pageParameters = pageParameters + (next to params.toString()); openPage(next) }, onBack = { backPage() }, params = org.json.JSONObject(pageParameters[route] ?: "{}"))
                                 }
                                 }
@@ -653,8 +653,8 @@ fun MainScreen(fragmentActivity: FragmentActivity) {
                     }
                 }
 
-            AppBuildWatermarks()
             } // 关闭 navBarBackdrop 捕获层
+            AppBuildWatermarks()
 
             // 底栏位于捕获层外，避免采样源包含底栏自身。
             CompositionLocalProvider(com.tyust.course.ui.theme.LocalNavigationMotion provides barMotion) {
@@ -810,12 +810,13 @@ fun MainScreen(fragmentActivity: FragmentActivity) {
 @Composable
 private fun BoxScope.AppBuildWatermarks() {
     Text(
-        text = "川职·特供概念版",
+        text = "川职 · 特供概念版",
         modifier = Modifier
             .align(Alignment.BottomEnd)
-            .padding(end = 12.dp, bottom = 8.dp),
-        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.55f),
-        fontSize = 10.sp,
+            .navigationBarsPadding()
+            .padding(end = 16.dp, bottom = 3.dp),
+        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.78f),
+        fontSize = 11.sp,
         fontWeight = FontWeight.Medium
     )
     // debug 的平铺水印不在这里画：这一层仍然在 navBarBackdrop 捕获层内部，

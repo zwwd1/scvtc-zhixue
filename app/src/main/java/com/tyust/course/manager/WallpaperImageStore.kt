@@ -54,9 +54,10 @@ object WallpaperImageStore {
     /** box blur 半径相对 soft 长边的比例：540px 时半径 22px，3-pass 后 ≈ σ11 的高斯。 */
     internal const val SoftBlurRadiusRatio = 1f / 24f
 
-    private fun sharpFile(context: Context) = File(context.filesDir, SHARP_NAME)
+    private fun generation(context:Context)=context.getSharedPreferences("wallpaper_image_files",0).getString("generation",null)
+    private fun sharpFile(context: Context) = generation(context)?.let{File(context.filesDir,"wallpaper-$it.jpg")}?:File(context.filesDir, SHARP_NAME)
 
-    private fun softFile(context: Context) = File(context.filesDir, SOFT_NAME)
+    private fun softFile(context: Context) = generation(context)?.let{File(context.filesDir,"wallpaper-$it-soft.jpg")}?:File(context.filesDir, SOFT_NAME)
 
     fun exists(context: Context): Boolean = sharpFile(context).exists()
 
@@ -72,6 +73,10 @@ object WallpaperImageStore {
         var oriented: Bitmap? = null
         var scaled: Bitmap? = null
         var soft: Bitmap? = null
+        val nextGeneration=java.util.UUID.randomUUID().toString()
+        val nextSharp=File(context.filesDir,"wallpaper-$nextGeneration.jpg")
+        val nextSoft=File(context.filesDir,"wallpaper-$nextGeneration-soft.jpg")
+        var published=false
         return try {
             // 量尺寸：decodeStream 在 inJustDecodeBounds 下【按契约返回 null】、
             // 只把尺寸写进 bounds——它的返回值不能进 elvis，否则任何图都判定失败
@@ -109,23 +114,32 @@ object WallpaperImageStore {
             oriented = applyOrientation(decoded, rotation)
             scaled = downscale(oriented, target)
 
-            if (!writeJpeg(scaled, sharpFile(context), quality = 90)) return null
-
             soft = buildSoftLayer(scaled)
-            if (!writeJpeg(soft, softFile(context), quality = 80)) return null
-
-            WallpaperImportResult(
+            val result=WallpaperImportResult(
                 dominantColor = dominantColor(soft),
                 width = scaled.width,
                 height = scaled.height,
                 toneMap = buildToneMap(scaled, soft)
             )
+            if(!writeJpeg(scaled,nextSharp,90)||!writeJpeg(soft,nextSoft,80))return null
+            // Switch the pair only after both images and the tone map are ready. A failed
+            // import must not erase or replace the user's previous wallpaper.
+            val previousSharp=sharpFile(context);val previousSoft=softFile(context)
+            val files=context.getSharedPreferences("wallpaper_image_files",0)
+            val previousGeneration=files.getString("generation",null)
+            if(!files.edit().putString("generation",nextGeneration).commit()){
+                files.edit().putString("generation",previousGeneration).apply()
+                return null
+            }
+            published=true
+            previousSharp.delete();previousSoft.delete()
+            result
         } catch (t: Throwable) {
             // OutOfMemoryError 也在内：一张超大图不该把 App 带走
             Log.w(TAG, "导入壁纸图片失败", t)
-            clear(context)
             null
         } finally {
+            if(!published){nextSharp.delete();nextSoft.delete()}
             // scaled/oriented 可能与 decoded 是同一个对象（无需旋转/缩放时直接复用）
             listOf(soft, scaled, oriented, decoded)
                 .distinct()

@@ -131,14 +131,16 @@ fun CourseSelectorTheme(
         WallpaperRegion(0, 0, viewportWidth, (viewportHeight * 0.10f).toInt()),
         wallpaperStyle.imageBlur,
         wallpaperStyle.imageDim,
-        statusSurface.toArgb(), statusSurface.alpha
+        statusSurface.toArgb(), statusSurface.alpha,
+        focusX=wallpaperStyle.imageFocusX,focusY=wallpaperStyle.imageFocusY,zoom=wallpaperStyle.imageZoom
     )
     val navigationBarUsesDarkIcons = toneMap.usesDarkBarIcons(
         viewportWidth,
         viewportHeight,
         WallpaperRegion(0, (viewportHeight * 0.90f).toInt(), viewportWidth, viewportHeight),
         wallpaperStyle.imageBlur,
-        wallpaperStyle.imageDim
+        wallpaperStyle.imageDim,
+        focusX=wallpaperStyle.imageFocusX,focusY=wallpaperStyle.imageFocusY,zoom=wallpaperStyle.imageZoom
     )
     if (!view.isInEditMode) {
         SideEffect {

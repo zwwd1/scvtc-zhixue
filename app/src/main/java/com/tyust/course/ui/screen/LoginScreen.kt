@@ -119,7 +119,7 @@ fun LoginScreen(
         captchaSubmitting = false
         showCaptchaDialog = false
     }
-    
+
     // Update cookie when external value changes
     LaunchedEffect(cookieValue) {
         if (cookieValue.isNotEmpty()) {
@@ -141,7 +141,7 @@ fun LoginScreen(
             )
         ) + fadeIn(animationSpec = androidx.compose.animation.core.tween(300))
     }
-    
+
     LaunchedEffect(Unit) {
         visible = true
     }
@@ -158,7 +158,7 @@ fun LoginScreen(
             showCaptchaDialog = false
         }
     }
-    
+
     GlassWindowHost {
     val backdrop = LocalControlBackdrop.current
     Box(
@@ -185,26 +185,26 @@ fun LoginScreen(
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
                     androidx.compose.foundation.Image(
-                        painter = androidx.compose.ui.res.painterResource(com.tyust.course.R.mipmap.ic_launcher),
+                        painter = androidx.compose.ui.res.painterResource(com.tyust.course.R.drawable.campus_icon_portrait),
                         contentDescription = null,
                         modifier = Modifier.size(64.dp)
                     )
-                    
+
                     Spacer(modifier = Modifier.height(24.dp))
-                    
+
                     WallpaperCaption(
                         text = androidx.compose.ui.res.stringResource(com.tyust.course.R.string.app_name),
                         style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.ExtraBold, letterSpacing = 0.sp)
                     )
-                    
+
                     Spacer(modifier = Modifier.height(4.dp))
-                    
+
                     WallpaperCaption("课表、成绩与选课", style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium))
                 }
             }
-            
+
             Spacer(modifier = Modifier.height(24.dp))
-            
+
             // Login Card (Glassmorphism / Outline style)
             AnimatedVisibility(
                 visible = visible,
@@ -222,7 +222,7 @@ fun LoginScreen(
                                 color = MaterialTheme.colorScheme.onSurface,
                                 modifier = Modifier.align(Alignment.Center)
                             )
-                            
+
                             // Settings button
                             IconButton(
                                 onClick = { showEditSchoolDialog = true },
@@ -236,9 +236,9 @@ fun LoginScreen(
                                 )
                             }
                         }
-                        
+
                         Spacer(modifier = Modifier.height(8.dp))
-                        
+
                         Text(
                             text = if (loginTab == 0 && onPasswordLogin != null) {
                                 "使用教务系统的学号与密码登录"
@@ -249,9 +249,9 @@ fun LoginScreen(
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             textAlign = TextAlign.Center
                         )
-                        
+
                         Spacer(modifier = Modifier.height(32.dp))
-                        
+
                         // School Selector
                         Text(
                             text = "选择学校",
@@ -260,14 +260,14 @@ fun LoginScreen(
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.align(Alignment.Start)
                         )
-                        
+
                         Spacer(modifier = Modifier.height(8.dp))
-                        
+
                         var selectedSchool by remember { mutableStateOf<SchoolConfig?>(null) }
                         var showAddSchoolDialog by remember { mutableStateOf(false) }
                         var showSchoolManagement by remember { mutableStateOf(false) }
                         var addSchoolName by remember { mutableStateOf("") }
-                        
+
                         // Keep the user's current choice when the list refreshes after add/edit.
                         LaunchedEffect(schools, selectedSchoolId) {
                             val chosenId = selectedSchoolId ?: selectedSchool?.id
@@ -305,7 +305,7 @@ fun LoginScreen(
                                 modifier = Modifier.fillMaxWidth().testTag("login-school-plugins"),
                                 trailing = { Icon(Icons.Default.ChevronRight, "管理学校插件") })
                         }
-                        
+
                         // Add School Dialog
                         if (showAddSchoolDialog) {
                             AddSchoolDialog(
@@ -321,7 +321,7 @@ fun LoginScreen(
                                 }
                             )
                         }
-                        
+
                         if (showSchoolManagement) SchoolManagementDialog(
                             selectedSchoolId = selectedSchool?.id,
                             onSelect = { school -> selectedSchool = school; onSchoolSelected(school) },
@@ -341,7 +341,7 @@ fun LoginScreen(
                                 }
                             )
                         }
-                        
+
                         Spacer(modifier = Modifier.height(20.dp))
 
                         // 登录方式切换
@@ -426,7 +426,7 @@ fun LoginScreen(
                                 }
                             }
                         } else {
-                        
+
                         // Cookie Input（玻璃多行输入）
                         GlassTextField(
                             value = cookie,
@@ -453,7 +453,7 @@ fun LoginScreen(
                             }
                         )
                         } // end else (cookie tab)
-                        
+
                         // Error Message
                         AnimatedVisibility(visible = errorMessage != null) {
                             Column {
@@ -470,9 +470,9 @@ fun LoginScreen(
                                 }
                             }
                         }
-                        
+
                         Spacer(modifier = Modifier.height(32.dp))
-                        
+
                         if(selectedSchoolId=="scvtc")SystemPrimaryButton(text="川职官方统一认证",onClick=onOpenWebView,enabled=!isLoading,modifier=Modifier.fillMaxWidth().height(56.dp))
                         // Login Button
                         if (loginTab == 0 && onPasswordLogin != null) {
@@ -527,9 +527,9 @@ fun LoginScreen(
                                 }
                             )
                         }
-                        
+
                         Spacer(modifier = Modifier.height(24.dp))
-                        
+
                         TextButton(
                             onClick = onSchoolAdaptation,
                             modifier = Modifier.fillMaxWidth()
@@ -567,9 +567,9 @@ fun LoginScreen(
                     cardInner()
                 }
             }
-            
+
             Spacer(modifier = Modifier.height(40.dp))
-            
+
             // Version Text
             AnimatedVisibility(visible = visible, enter = fadeIn(animationSpec = androidx.compose.animation.core.tween(800))) {
                 Text(
@@ -794,7 +794,7 @@ fun AddSchoolDialog(
 
     val draft = com.tyust.course.model.SchoolFormDraft(name, domain, protocol, basePath, academicSystem, detectionSource)
     val showError = domain.isNotBlank() && !draft.isValidDomain
-    
+
     SystemDialog(
         onDismissRequest = onDismiss,
         title = {

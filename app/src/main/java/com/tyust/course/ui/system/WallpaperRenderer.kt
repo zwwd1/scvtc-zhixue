@@ -187,11 +187,11 @@ private fun DrawScope.drawImageWallpaper(sharp: ImageBitmap, style: WallpaperSty
     // 底色先铺一层：图片比例与屏幕不一致的极端情况下不至于露出黑边
     drawRect(style.baseColor)
     if (soft != null && blur > 0f) {
-        drawCenterCrop(soft, alpha = 1f)
+        drawCenterCrop(soft, alpha = 1f,style=style)
     }
     val sharpAlpha = if (soft != null) 1f - blur else 1f
     if (sharpAlpha > 0.004f) {
-        drawCenterCrop(sharp, alpha = sharpAlpha)
+        drawCenterCrop(sharp, alpha = sharpAlpha,style=style)
     }
     val dim = style.imageDim.coerceIn(0f, 1f)
     if (dim > 0f) {
@@ -201,14 +201,14 @@ private fun DrawScope.drawImageWallpaper(sharp: ImageBitmap, style: WallpaperSty
 }
 
 /** 居中裁切铺满，比例不变。 */
-private fun DrawScope.drawCenterCrop(image: ImageBitmap, alpha: Float) {
+private fun DrawScope.drawCenterCrop(image: ImageBitmap, alpha: Float,style:WallpaperStyle) {
     if (image.width <= 0 || image.height <= 0) return
-    val scale = max(size.width / image.width, size.height / image.height)
+    val scale = max(size.width / image.width, size.height / image.height)*style.imageZoom
     val srcWidth = (size.width / scale).roundToInt().coerceIn(1, image.width)
     val srcHeight = (size.height / scale).roundToInt().coerceIn(1, image.height)
     drawImage(
         image = image,
-        srcOffset = IntOffset((image.width - srcWidth) / 2, (image.height - srcHeight) / 2),
+        srcOffset = IntOffset(((image.width-srcWidth)*style.imageFocusX).roundToInt(),((image.height-srcHeight)*style.imageFocusY).roundToInt()),
         srcSize = IntSize(srcWidth, srcHeight),
         dstOffset = IntOffset.Zero,
         dstSize = IntSize(size.width.roundToInt(), size.height.roundToInt()),

@@ -46,9 +46,20 @@ abstract class ScvtcDatabase:RoomDatabase(){abstract fun schedules():ScvtcDao;ab
 /** Request credentials stay in Keystore-encrypted app-private storage; exports never include them. */
 private object RecipeVault {
  private const val alias="scvtc-next-query"
+ private val keyLock=Any()
  private fun key():SecretKey {val ks=KeyStore.getInstance("AndroidKeyStore").apply{load(null)};return (ks.getKey(alias,null) as? SecretKey)?:KeyGenerator.getInstance("AES","AndroidKeyStore").apply{init(KeyGenParameterSpec.Builder(alias,KeyProperties.PURPOSE_ENCRYPT or KeyProperties.PURPOSE_DECRYPT).setBlockModes(KeyProperties.BLOCK_MODE_GCM).setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE).build())}.generateKey()}
  fun seal(text:String):String {val c=Cipher.getInstance("AES/GCM/NoPadding");c.init(Cipher.ENCRYPT_MODE,key());return Base64.encodeToString(c.iv+c.doFinal(text.toByteArray()),Base64.NO_WRAP)}
  fun open(text:String):String {val b=Base64.decode(text,Base64.NO_WRAP);val c=Cipher.getInstance("AES/GCM/NoPadding");c.init(Cipher.DECRYPT_MODE,key(),GCMParameterSpec(128,b.copyOfRange(0,12)));return String(c.doFinal(b.copyOfRange(12,b.size)))}
+ fun sealPayload(scope:String,text:String):String {
+  val c=Cipher.getInstance("AES/GCM/NoPadding");c.init(Cipher.ENCRYPT_MODE,synchronized(keyLock){key()});c.updateAAD(scope.toByteArray())
+  return "encrypted:v1:"+Base64.encodeToString(c.iv+c.doFinal(text.toByteArray()),Base64.NO_WRAP)
+ }
+ fun openPayload(scope:String,text:String):String {
+  if(!text.startsWith("encrypted:v1:"))return text // Forward-compatible reading of the first release.
+  val b=Base64.decode(text.removePrefix("encrypted:v1:"),Base64.NO_WRAP)
+  val c=Cipher.getInstance("AES/GCM/NoPadding");c.init(Cipher.DECRYPT_MODE,synchronized(keyLock){key()},GCMParameterSpec(128,b.copyOfRange(0,12)));c.updateAAD(scope.toByteArray())
+  return String(c.doFinal(b.copyOfRange(12,b.size)))
+ }
 }
 object ScvtcRuntime {
  private val applicationJobs=CoroutineScope(SupervisorJob()+Dispatchers.IO)
@@ -58,6 +69,9 @@ object ScvtcRuntime {
  val revision=MutableStateFlow(0)
  val status=MutableStateFlow("登录官方教务后同步；离线课表保存在本机")
  val mutex=Mutex()
+ private lateinit var progress:NativeSyncProgress
+ val syncState get()=progress.state
+ private val serviceJobs=mutableMapOf<String,Job>()
  private var firstSync:Job?=null
  fun startNativeSync(mode:String="range"){
   if(firstSync?.isActive==true)return
@@ -66,10 +80,13 @@ object ScvtcRuntime {
  fun stopNativeSync(){firstSync?.cancel();firstSync=null;status.value="已停止本次同步，已保存的数据保留"}
  private val networkMutex=Mutex()
  fun refreshService(module:String){
-  applicationJobs.launch{try{synchronizeService(module)}catch(e:CancellationException){throw e}catch(e:Exception){status.value="此服务未更新；原缓存保留：${e.message.orEmpty().take(120)}"}}
+  synchronized(serviceJobs){
+   if(serviceJobs[module]?.isActive==true)return
+   serviceJobs[module]=applicationJobs.launch{try{synchronizeService(module)}catch(e:CancellationException){throw e}catch(e:Exception){status.value="此服务未更新；原缓存保留"}}
+  }
  }
  private val client=OkHttpClient.Builder().followRedirects(false).followSslRedirects(false).connectTimeout(15,TimeUnit.SECONDS).readTimeout(30,TimeUnit.SECONDS).build()
- fun initialize(c:Context){context=c.applicationContext;db=Room.databaseBuilder(context,ScvtcDatabase::class.java,"scvtc-native.db").addMigrations(object:androidx.room.migration.Migration(1,2){override fun migrate(db:androidx.sqlite.db.SupportSQLiteDatabase){db.execSQL("CREATE TABLE IF NOT EXISTS school_services (account TEXT NOT NULL, semester TEXT NOT NULL, module TEXT NOT NULL, payload TEXT NOT NULL, fetchedAt INTEGER NOT NULL, PRIMARY KEY(account,semester,module))")}}).build()}
+ fun initialize(c:Context){context=c.applicationContext;progress=NativeSyncProgress(context);progress.restore(account,semester);db=Room.databaseBuilder(context,ScvtcDatabase::class.java,"scvtc-native.db").addMigrations(object:androidx.room.migration.Migration(1,2){override fun migrate(db:androidx.sqlite.db.SupportSQLiteDatabase){db.execSQL("CREATE TABLE IF NOT EXISTS school_services (account TEXT NOT NULL, semester TEXT NOT NULL, module TEXT NOT NULL, payload TEXT NOT NULL, fetchedAt INTEGER NOT NULL, PRIMARY KEY(account,semester,module))")}}).build()}
  private val prefs get()=context.getSharedPreferences("scvtc_profile",Context.MODE_PRIVATE)
  val account get()=prefs.getString("account","").orEmpty()
  val semester get()=prefs.getString("semester","").orEmpty()
@@ -94,7 +111,10 @@ object ScvtcRuntime {
   prefs.edit().putString("account",a).putString("semester",prefs.getString("term:$a","")).remove("lastAttempt").apply()
  }
  suspend fun snapshot():ScvtcSnapshot?=db.schedules().read(account,semester)
- suspend fun extraction():Extraction?=snapshot()?.let{json.decodeFromString<Extraction>(it.payload)}
+ private fun scope(a:String,t:String,m:String)="$a|$t|$m"
+ private fun decode(a:String,t:String,m:String,payload:String)=json.decodeFromString<Extraction>(RecipeVault.openPayload(scope(a,t,m),payload))
+ private fun encode(value:Extraction)=RecipeVault.sealPayload(scope(value.account,value.semester,value.module),json.encodeToString(value))
+ suspend fun extraction():Extraction?=snapshot()?.let{decode(it.account,it.semester,"schedule",it.payload)}
  suspend fun save(next:Extraction,recipe:QueryRecipe?=null,finishBatch:Boolean=true,valid:()->Boolean={true}):Extraction = mutex.withLock {
   val a=next.account;val t=next.semester
   fun current()=a==account && t==semester && valid()
@@ -103,15 +123,15 @@ object ScvtcRuntime {
   require(next.warnings.isEmpty()){next.warnings.joinToString("；")}
   check(valid()){"页面已切换，旧查询未保存"}
   val old=db.schedules().read(a,t)
-  val previous=old?.let{json.decodeFromString<Extraction>(it.payload)}
+  val previous=old?.let{decode(a,t,"schedule",it.payload)}
   val merged=MergeRules.merge(previous,next)
   // Durable rollback checkpoint is written before the replacement transaction.
-  if(previous?.meetings?.isNotEmpty()==true)check(prefs.edit().putString(backupKey(a,t),old!!.payload).putLong(backupKey(a,t)+":time",old.fetchedAt).commit()){"未能备份原课表，取消覆盖"}
+  if(previous?.meetings?.isNotEmpty()==true)check(prefs.edit().putString(backupKey(a,t),encode(previous)).putLong(backupKey(a,t)+":time",old!!.fetchedAt).commit()){"未能备份原课表，取消覆盖"}
   val sealed=recipe?.takeIf{it.coverageWeeks.containsAll((1..28).toList()) && ScvtcSchoolAdapter().validateReadRecipe(it)}?.let{RecipeVault.seal(json.encodeToString(it))}?:old?.recipe.orEmpty()
   val fetchedAt=System.currentTimeMillis()
   db.withTransaction {
    check(current()){"账号、学期或查询已改变"}
-   db.schedules().put(ScvtcSnapshot(a,t,json.encodeToString(merged),fetchedAt,sealed))
+   db.schedules().put(ScvtcSnapshot(a,t,encode(merged),fetchedAt,sealed))
    withContext(Dispatchers.Main){check(current());project(merged,finishBatch,fetchedAt)}
    check(current())
   }
@@ -119,14 +139,23 @@ object ScvtcRuntime {
   cn.scvtc.campus.CloudBackup.get(context).publish(merged,System.currentTimeMillis())
   merged
  }
- suspend fun service(module:String):Extraction?=db.services().read(account,semester,module)?.let{json.decodeFromString<Extraction>(it.payload)}
+ suspend fun service(module:String,term:String=semester):Extraction?=db.services().read(account,term,module)?.let{decode(it.account,it.semester,it.module,it.payload)}
+ suspend fun allGrades():Extraction?=service("grades","all")?:service("grades")
+ suspend fun serviceSavedAt(module:String):Long=db.services().read(account,semester,module)?.fetchedAt?:0
  suspend fun saveService(next:Extraction,replace:Boolean,valid:()->Boolean):Extraction=mutex.withLock{
   require(next.module!="schedule"&&next.account==account&&next.semester==semester)
   require(next.warnings.isEmpty() && (next.records.isNotEmpty()||next.links.isNotEmpty()||next.full&&next.emptyConfirmed)){"服务页尚无可识别记录，原记录保留"}
   val a=next.account;val t=next.semester
-  val previous=if(replace)null else db.services().read(a,t,next.module)?.let{json.decodeFromString<Extraction>(it.payload)}
+  val previous=if(replace)null else db.services().read(a,t,next.module)?.let{decode(a,t,next.module,it.payload)}
   val merged=MergeRules.merge(previous,next)
-  db.withTransaction{check(valid() && account==a && semester==t);db.services().put(ScvtcServiceSnapshot(a,t,next.module,json.encodeToString(merged),System.currentTimeMillis()))}
+  val fetchedAt=System.currentTimeMillis()
+  val copies=if(next.module=="grades")listOf(merged.copy(semester="all"))+
+   (merged.records.mapNotNull{it.fields["学期"]?.takeIf(String::isNotBlank)}+t).distinct().map{term->
+    val rows=merged.records.filter{it.fields["学期"]==term}
+    merged.copy(semester=term,records=rows,emptyConfirmed=rows.isEmpty())
+   }else listOf(merged)
+  val encrypted=copies.map{data->ScvtcServiceSnapshot(a,data.semester,data.module,encode(data),fetchedAt)}
+  db.withTransaction{check(valid() && account==a && semester==t);encrypted.forEach{db.services().put(it)}}
   withContext(Dispatchers.Main){revision.value++;status.value="已保存 ${merged.records.size} 条服务记录"};merged
  }
  private fun backupKey(a:String,t:String)="last-good:$a:$t"
@@ -134,17 +163,17 @@ object ScvtcRuntime {
   val a=account;val t=semester
   if(a.isBlank()||t.isBlank())return@withLock false
   val saved=db.schedules().read(a,t)
-  val local=saved?.let{runCatching{json.decodeFromString<Extraction>(it.payload)}.getOrNull()}
+  val local=saved?.let{runCatching{decode(a,t,"schedule",it.payload)}.getOrNull()}
   if(local!=null && local.account==a && local.semester==t && local.meetings.isNotEmpty()){
    withContext(Dispatchers.Main){if(a==account && t==semester){project(local,true,saved.fetchedAt);revision.value++}}
    return@withLock false
   }
   val backup=prefs.getString(backupKey(a,t),null)?:return@withLock false
-  val e=runCatching{json.decodeFromString<Extraction>(backup)}.getOrNull()?:return@withLock false
+  val e=runCatching{decode(a,t,"schedule",backup)}.getOrNull()?:return@withLock false
   if(e.account!=a||e.semester!=t||e.meetings.isEmpty())return@withLock false
   ScheduleWriteGuard.validate(null,e)
   val fetchedAt=prefs.getLong(backupKey(a,t)+":time",0L)
-  db.withTransaction{check(a==account&&t==semester);db.schedules().put(ScvtcSnapshot(a,t,backup,fetchedAt,saved?.recipe.orEmpty()))}
+  db.withTransaction{check(a==account&&t==semester);db.schedules().put(ScvtcSnapshot(a,t,encode(e),fetchedAt,saved?.recipe.orEmpty()))}
   withContext(Dispatchers.Main){if(a==account&&t==semester){project(e,true,fetchedAt);revision.value++;status.value="已恢复上一份有效课表"}};true
  }
  private fun project(e:Extraction,finishBatch:Boolean,fetchedAt:Long){
@@ -159,12 +188,14 @@ object ScvtcRuntime {
  suspend fun synchronize(mode:String="range"):Extraction=networkMutex.withLock {
   val requestedAccount=account;val requestedSemester=semester
   require(requestedAccount.isNotBlank() && requestedSemester.isNotBlank()){"请先打开官方课表并确认账号和学期"}
+  progress.begin(requestedAccount,requestedSemester,cachedAt=snapshot()?.fetchedAt?:0)
   status.value="正在同步课表"
-  restoreLastGood()
-  if(extraction()?.meetings.isNullOrEmpty())cn.scvtc.campus.CloudBackup.get(context).restore(requestedAccount,requestedSemester)?.let{save(it)}
   try {
+   restoreLastGood()
+   if(extraction()?.meetings.isNullOrEmpty())cn.scvtc.campus.CloudBackup.get(context).restore(requestedAccount,requestedSemester)?.let{save(it)}
    require(mode in setOf("range","weekly"))
    val login=cn.scvtc.campus.OfficialLoginMemory(context)
+   progress.phase(NativeSyncStage.AUTHENTICATING,"正在认证学校账号…")
    login.restoreSession(requestedAccount)
    val api=cn.scvtc.campus.JwxtApi(headers={url->login.apiHeaders(requestedAccount,url)})
    val auth=cn.scvtc.campus.CasAuthManager(context,api)
@@ -173,6 +204,7 @@ object ScvtcRuntime {
     fun current()=requestedAccount==account&&requestedSemester==semester
     check(current()){"账号或学期已切换"}
     login.confirmed(requestedAccount)
+    progress.phase(NativeSyncStage.READING,"正在读取真实课表…")
     val (calendar,weeks)=api.calendar()
     require(calendar.semester==requestedSemester){"官方学期已改变，请确认新学期；原课表保留"}
     saveService(Extraction("studentInfo",requestedAccount,requestedSemester,source=cn.scvtc.campus.JwxtApi.IDENTITY,
@@ -182,7 +214,10 @@ object ScvtcRuntime {
     for((index,range)in ranges.withIndex()){
      currentCoroutineContext().ensureActive();check(current()){"账号或学期已切换"}
      val response=api.schedule(requestedAccount,requestedSemester,range)
+     progress.phase(NativeSyncStage.WRITING,"正在保存课表…")
      result=save(response.extraction,response.recipe,index==ranges.lastIndex,::current)
+     progress.committed(snapshot()?.fetchedAt?:error("课表事务未完成"))
+     progress.phase(NativeSyncStage.READING,"正在读取后续教务数据…")
     }
     withContext(Dispatchers.Main){
      check(current())
@@ -203,23 +238,32 @@ object ScvtcRuntime {
      }
     }
     status.value="已保存 ${weeks.size} 周课表与学生信息；$completed 项服务完成"+if(failed>0)"，$failed 项未完成，原缓存保留"else""
+    progress.complete()
     result?:error("课表读取未完成")
    }
   }
-  catch(e:CancellationException){throw e}
-  catch(e:Exception){status.value="同步未完成，已保留离线课表：${e.message.orEmpty().take(160)}";throw e}
+  catch(e:CancellationException){progress.phase(NativeSyncStage.CACHE,"已停止 · 使用本机缓存");throw e}
+  catch(e:Exception){progress.failure(e);status.value="同步未完成，已保留离线课表";throw e}
  }
  suspend fun synchronizeService(module:String):Extraction=networkMutex.withLock{
   require(module in cn.scvtc.campus.JwxtServices.endpoints)
   val a=account;val t=semester;require(a.isNotBlank()&&t.isNotBlank())
+  progress.begin(a,t,School.service(module)?.title?:"教务数据",serviceSavedAt(module))
+  progress.phase(NativeSyncStage.AUTHENTICATING,"正在认证学校账号…")
+  try {
   val login=cn.scvtc.campus.OfficialLoginMemory(context);login.restoreSession(a)
   val api=cn.scvtc.campus.JwxtApi(headers={url->login.apiHeaders(a,url)})
   val auth=cn.scvtc.campus.CasAuthManager(context,api)
   cn.scvtc.campus.JwxtSessionManager(api,auth::restoreJwxt).withSession(a){
    check(a==account&&t==semester)
    login.confirmed(a)
-   saveService(api.service(module,a,t),true){a==account&&t==semester}
+   progress.phase(NativeSyncStage.READING,"正在读取真实教务数据…")
+   val result=api.service(module,a,t)
+   progress.phase(NativeSyncStage.WRITING,"正在保存教务数据…")
+   saveService(result,true){a==account&&t==semester}.also{progress.committed(serviceSavedAt(module));progress.complete()}
   }
+  }catch(e:CancellationException){progress.phase(NativeSyncStage.CACHE,"已停止 · 使用本机缓存");throw e}
+  catch(e:Exception){progress.failure(e);throw e}
  }
  suspend fun officialSemesters():List<String> = networkMutex.withLock {
   val a=account;val t=semester;require(a.isNotBlank()&&t.isNotBlank())

@@ -85,7 +85,10 @@ data class WallpaperStyle(
     /** 蒙版强度 0..1。 */
     val imageDim: Float = 0f,
     /** 模糊强度 0..1。1 = 只画缩略图。 */
-    val imageBlur: Float = 0f
+    val imageBlur: Float = 0f,
+    val imageFocusX:Float=0.5f,
+    val imageFocusY:Float=0.5f,
+    val imageZoom:Float=1f
 )
 
 fun WallpaperPreset.toStyle(): WallpaperStyle =
@@ -249,6 +252,9 @@ object AppearanceSettingsManager {
 
     var imageBlur by mutableFloatStateOf(0f)
         private set
+    var imageFocusX by mutableFloatStateOf(0.5f);private set
+    var imageFocusY by mutableFloatStateOf(0.5f);private set
+    var imageZoom by mutableFloatStateOf(1f);private set
 
     private var imageColor by mutableStateOf(Color(0xFFF2F2F7))
     private var imageSharp by mutableStateOf<ImageBitmap?>(null)
@@ -298,6 +304,9 @@ object AppearanceSettingsManager {
             ?.let { Color(it) }
         imageDim = prefs?.getFloat(KEY_IMAGE_DIM, 0f) ?: 0f
         imageBlur = prefs?.getFloat(KEY_IMAGE_BLUR, 0f) ?: 0f
+        imageFocusX=prefs?.getFloat("wallpaper_focus_x",0.5f)?:0.5f
+        imageFocusY=prefs?.getFloat("wallpaper_focus_y",0.5f)?:0.5f
+        imageZoom=prefs?.getFloat("wallpaper_zoom",1f)?:1f
         prefs?.takeIf { it.contains(KEY_IMAGE_COLOR) }
             ?.getInt(KEY_IMAGE_COLOR, 0)
             ?.let { imageColor = Color(it) }
@@ -414,6 +423,8 @@ object AppearanceSettingsManager {
                 imageSharp = sharp
                 imageSoft = soft
                 imageToneMap = imported.toneMap
+                imageFocusX=0.5f;imageFocusY=0.5f;imageZoom=1f
+                persistImageAdjust()
                 hasImageWallpaper = true
                 mode = WallpaperMode.Image
                 prefs?.edit()
@@ -473,7 +484,15 @@ object AppearanceSettingsManager {
         prefs?.edit()
             ?.putFloat(KEY_IMAGE_DIM, imageDim)
             ?.putFloat(KEY_IMAGE_BLUR, imageBlur)
+            ?.putFloat("wallpaper_focus_x",imageFocusX)
+            ?.putFloat("wallpaper_focus_y",imageFocusY)
+            ?.putFloat("wallpaper_zoom",imageZoom)
             ?.apply()
+    }
+    fun updateImageCrop(focusX:Float=imageFocusX,focusY:Float=imageFocusY,zoom:Float=imageZoom,persist:Boolean=false){
+        imageFocusX=focusX.coerceIn(0f,1f);imageFocusY=focusY.coerceIn(0f,1f);imageZoom=zoom.coerceIn(1f,3f)
+        recomputeStyle()
+        if(persist)persistImageAdjust()
     }
 
     private fun loadImageAsync() {
@@ -511,7 +530,7 @@ object AppearanceSettingsManager {
                 dominant = imageColor,
                 dim = imageDim,
                 blur = imageBlur
-            )
+            ).copy(imageFocusX=imageFocusX,imageFocusY=imageFocusY,imageZoom=imageZoom)
             WallpaperMode.Color -> customColor?.let { customWallpaperStyle(it) }
                 ?: wallpaper.toStyle()
             WallpaperMode.Preset -> wallpaper.toStyle()
