@@ -40,6 +40,7 @@ import androidx.compose.material.icons.outlined.Palette
 import androidx.compose.material.icons.outlined.FavoriteBorder
 import androidx.compose.material.icons.outlined.School
 import androidx.compose.material.icons.outlined.SystemUpdate
+import androidx.compose.material.icons.outlined.Tune
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
@@ -48,6 +49,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -111,6 +114,9 @@ fun SettingsScreen(
     onCampusServices: () -> Unit = {},
     onQuickFeedback: () -> Unit = {}
 ) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    var showAppearanceDetails by remember { mutableStateOf(false) }
+    if (showAppearanceDetails) com.tyust.course.scvtc.CampusAppearanceSettings { showAppearanceDetails = false }
     val scrollState = rememberScrollState()
     // 折叠进度随滚动偏移连续变化（约 96px 行程），全程跟手
     val headerCollapse by remember {
@@ -163,25 +169,11 @@ fun SettingsScreen(
                     onClick = onSchoolSelect
                 )
                 SettingsRow(
-                    icon = Icons.Outlined.AssignmentInd,
-                    iconTint = Color(0xFF18796B),
-                    title = "插件中心",
-                    subtitle = "本校适配与已安装插件",
-                    onClick = onAcademicPlugins
-                )
-                SettingsRow(
                     icon = Icons.Outlined.School,
                     iconTint = Color(0xFF18796B),
                     title = "校园服务",
                     subtitle = "本校服务与可配置页面",
                     onClick = onCampusServices
-                )
-                SettingsRow(
-                    icon = Icons.Outlined.AssignmentInd,
-                    iconTint = if (isSuper) Color(0xFF34C759) else Color(0xFF5E5CE6),
-                    title = "配额 / 身份",
-                    subtitle = if (isSuper) "超级用户 · 无限制" else quotaInfo.ifBlank { "普通用户" },
-                    onClick = onQuotaClick
                 )
                 SettingsRow(
                     icon = Icons.Outlined.ManageAccounts,
@@ -206,7 +198,7 @@ fun SettingsScreen(
             }
 
             com.tyust.course.scvtc.NextGroup {
-                    com.tyust.course.scvtc.NextRow("川职同步、三种风格与云备份", "离线课表保护、官方认证、日期匹配") {com.tyust.course.scvtc.CampusNavigation.request.value="profile"}
+                    com.tyust.course.scvtc.NextRow("教务同步与本机备份", "离线课表保护、官方认证、日期匹配") {com.tyust.course.scvtc.CampusNavigation.request.value="profile"}
                     com.tyust.course.scvtc.NextRow("CSV / ICS / HTML", "导入预览与导出") {com.tyust.course.scvtc.CampusNavigation.request.value="files"}
                 }
             InsetGroupedSection(Modifier.moduleEntrance(3), header = "外观") {
@@ -231,7 +223,7 @@ fun SettingsScreen(
                     subtitle = if (glassEffectEnabled) {
                         "折射、色散与跟手形变"
                     } else {
-                        "已关闭，改用不透明材质，更省电也更清晰"
+                        "高斯模糊 · 全应用使用统一磨砂效果"
                     },
                     trailing = {
                         LiquidSwitch(
@@ -240,6 +232,7 @@ fun SettingsScreen(
                         )
                     }
                 )
+                SettingsRow(icon = Icons.Outlined.Tune, iconTint = MaterialTheme.colorScheme.primary, title = "卡片、动效与校园助手", subtitle = "统一调整外观参数与小澄状态", onClick = { showAppearanceDetails = true })
                 InsetGroupedRow(
                     icon = Icons.Outlined.Home,
                     iconTint = MaterialTheme.colorScheme.primary,
@@ -259,20 +252,10 @@ fun SettingsScreen(
                 )
             }
 
+            InsetGroupedSection(Modifier.moduleEntrance(3), header = "智能助手") {
+                SettingsRow(icon = Icons.Outlined.AutoAwesome, iconTint = Color(0xFF5AC8FA), title = "AI 助手小澄", subtitle = "学习答疑、课表上下文与加密配置", onClick = { context.startActivity(android.content.Intent(context, com.tyust.course.scvtc.CampusAiActivity::class.java)) }, showDivider = false)
+            }
             InsetGroupedSection(Modifier.moduleEntrance(3), header = "应用与支持") {
-                InsetGroupedRow(
-                    icon = Icons.Outlined.Assignment,
-                    iconTint = MaterialTheme.colorScheme.primary,
-                    title = "问卷中心",
-                    subtitle = if (surveyUnreadCount > 0) "有 $surveyUnreadCount 份新问卷" else "查看问卷、收藏与填写记录",
-                    onClick = onSurveyCenter,
-                    trailing = {
-                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                            if (surveyUnreadCount > 0) Box(Modifier.size(8.dp).background(SemanticDanger, CircleShape))
-                            Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(18.dp))
-                        }
-                    }
-                )
                 SettingsRow(
                     icon = Icons.Outlined.Home,
                     iconTint = Color(0xFF5E5CE6),
@@ -291,7 +274,7 @@ fun SettingsScreen(
                     icon = Icons.Outlined.ContentPasteSearch,
                     iconTint = Color(0xFF18796B),
                     title = "快捷反馈",
-                    subtitle = "无需 GitHub 账号，可在站内查看回复",
+                    subtitle = "在本项目 GitHub 提交问题与查看回复",
                     onClick = onQuickFeedback
                 )
                 SettingsRow(
@@ -307,13 +290,6 @@ fun SettingsScreen(
                     title = "最近错误",
                     subtitle = "查看、复制错误报告并反馈",
                     onClick = onErrorReport
-                )
-                SettingsRow(
-                    icon = Icons.Outlined.School,
-                    iconTint = Color(0xFF0A84FF),
-                    title = "统一登录适配",
-                    subtitle = "申请学校支持或查看适配进度",
-                    onClick = onSchoolAdaptation
                 )
                 SettingsRow(
                     icon = Icons.Outlined.Info,
@@ -333,11 +309,6 @@ fun SettingsScreen(
             }
 
             InsetGroupedSection(Modifier.moduleEntrance(3), header = "数据与安全") {
-                InsetGroupedRow(
-                    title = "匿名使用统计",
-                    subtitle = "统计每日活跃与问卷入口点击；关闭后停止上报",
-                    trailing = { LiquidSwitch(checked = usageEnabled, onCheckedChange = onUsageEnabledChange) }
-                )
                 SettingsRow(
                     icon = Icons.Outlined.Delete,
                     iconTint = Color(0xFFFF9F0A),

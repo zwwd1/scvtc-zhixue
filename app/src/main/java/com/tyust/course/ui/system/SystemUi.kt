@@ -226,10 +226,10 @@ fun SystemTopBar(
             .wallpaperRegion(regionState)
             .reportNoticeAnchor()
     ) {
-        val showShell = customWallpaper || collapse > 0.01f
+        val showShell = collapse > 0.01f
         val shellModifier = when {
             useGlass && backdrop != null -> Modifier
-                .graphicsLayer { alpha = if (customWallpaper) 1f else collapse }
+                .graphicsLayer { alpha = collapse }
                 // 下缘【齐边】收尾：渐隐抹在模糊结果上只是把"模糊的那一份"按 alpha 混到
                 // 清晰的原图上，两份图像叠在一起就是一条重影带（iOS 渐变的是模糊半径，
                 // 一次 drawBackdrop 做不到）。玻璃条本来就该有边——那圈默认高光已关掉。

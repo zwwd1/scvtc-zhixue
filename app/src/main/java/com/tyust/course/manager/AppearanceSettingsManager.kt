@@ -59,7 +59,8 @@ enum class WallpaperPreset(
     CoolGray("冷灰", Color(0xFFEBEDF0), Color(0xFFFFFFFF), Color(0xFF5A6672), false),
     Sky("天蓝", Color(0xFFEAF1FB), Color(0xFFFFFFFF), Color(0xFF4F86C6), false),
     Graphite("石墨灰", Color(0xFF2C2C2E), Color(0xFF48484A), Color(0xFF000000), true),
-    SpaceBlack("深空黑", Color(0xFF1C1C1E), Color(0xFF3A3A3C), Color(0xFF000000), true);
+    SpaceBlack("深空黑", Color(0xFF1C1C1E), Color(0xFF3A3A3C), Color(0xFF000000), true),
+    CampusLake("川职月光", Color(0xFF172C53), Color(0xFF638DC0), Color(0xFF081226), true);
 }
 
 /**
@@ -219,15 +220,13 @@ object AppearanceSettingsManager {
     private val ioScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     /** 最近一次选中的预设。自定义模式下它仍然保留，切回"预设"时不用重新挑。 */
-    var wallpaper by mutableStateOf(WallpaperPreset.Aurora)
+    var wallpaper by mutableStateOf(WallpaperPreset.CampusLake)
         private set
 
     /**
      * 用户是否要液态玻璃。
      *
-     * 关掉之后 `currentGlassCapability()` 直接落到 `Material` 档，全 App 走各组件
-     * **已有的**不透明回退分支（低于 API 31 的设备一直走那条路径），因此这个开关
-     * 不需要任何新的渲染代码。
+     * 开启时使用原有折射和色散；关闭后所有组件继续使用背景采样与高斯模糊。
      */
     var glassEffectEnabled by mutableStateOf(true)
         private set
@@ -260,6 +259,8 @@ object AppearanceSettingsManager {
     private var imageSharp by mutableStateOf<ImageBitmap?>(null)
     private var imageSoft by mutableStateOf<ImageBitmap?>(null)
     private var imageToneMap by mutableStateOf<WallpaperToneMap?>(null)
+    private var campusImage by mutableStateOf<ImageBitmap?>(null)
+    private var campusToneMap: WallpaperToneMap? = null
 
     /**
      * 当前生效的壁纸外观。**缓存成 state 而不是每次 get 重算**——绘制路径每帧都会读它，
@@ -295,7 +296,7 @@ object AppearanceSettingsManager {
         val stored = prefs?.getString(KEY_WALLPAPER, null)
         wallpaper = stored
             ?.let { name -> runCatching { WallpaperPreset.valueOf(name) }.getOrNull() }
-            ?: WallpaperPreset.Aurora
+            ?: WallpaperPreset.CampusLake
         glassEffectEnabled = prefs?.getBoolean(KEY_GLASS_EFFECT, true) ?: true
         navBarAutoCollapseEnabled = prefs?.getBoolean(KEY_NAV_BAR_AUTO_COLLAPSE, true) ?: true
         customColor = prefs
@@ -317,6 +318,12 @@ object AppearanceSettingsManager {
         hasImageWallpaper = WallpaperImageStore.exists(app)
         mode = resolveMode()
         recomputeStyle()
+        ioScope.launch {
+            val bitmap = android.graphics.BitmapFactory.decodeResource(app.resources, com.tyust.course.R.drawable.campus_glass_wallpaper,
+                android.graphics.BitmapFactory.Options().apply { inScaled = false; inSampleSize = 2 })
+            val map = WallpaperImageStore.analyzeBitmap(bitmap)
+            withContext(Dispatchers.Main) { campusImage = bitmap.asImageBitmap(); campusToneMap = map; recomputeStyle() }
+        }
         if (mode == WallpaperMode.Image) loadImageAsync()
         // 存量升级：旧版模糊层是 72px 裸缩略图（上采样像压缩画质），按高斯管道重生成一次
         if (hasImageWallpaper && (prefs?.getInt(KEY_STORE_VERSION, 1) ?: 1) < STORE_VERSION) {
@@ -533,12 +540,15 @@ object AppearanceSettingsManager {
             ).copy(imageFocusX=imageFocusX,imageFocusY=imageFocusY,imageZoom=imageZoom)
             WallpaperMode.Color -> customColor?.let { customWallpaperStyle(it) }
                 ?: wallpaper.toStyle()
-            WallpaperMode.Preset -> wallpaper.toStyle()
+            WallpaperMode.Preset -> wallpaper.toStyle().let {
+                if (wallpaper == WallpaperPreset.CampusLake) it.copy(image = campusImage) else it
+            }
         }
         toneMap = when (mode) {
             WallpaperMode.Image -> imageToneMap ?: WallpaperToneMap.uniform(imageColor.toArgb())
             WallpaperMode.Color -> WallpaperToneMap.uniform(style.baseColor.toArgb())
-            WallpaperMode.Preset -> WallpaperToneMap.uniform(style.baseColor.toArgb())
+            WallpaperMode.Preset -> if (wallpaper == WallpaperPreset.CampusLake) campusToneMap ?: WallpaperToneMap.uniform(style.baseColor.toArgb())
+                else WallpaperToneMap.uniform(style.baseColor.toArgb())
         }
     }
 

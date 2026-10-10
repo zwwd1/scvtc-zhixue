@@ -40,6 +40,12 @@ data class ThemeState(
   val courseRadius:Float=12f,
   val courseHighlight:Float=.35f,
   val courseMotion:Float=1f,
+  val navigationBlurDp:Float?=null,
+  val navigationRefractionScale:Float=1f,
+  val navigationDispersion:Boolean=true,
+  val navigationHighlightScale:Float=1f,
+  val navigationShadowScale:Float=1f,
+  val navigationSpringScale:Float=1f,
 ) {
   fun effectiveDark(system: Boolean) =
     when (mode) {

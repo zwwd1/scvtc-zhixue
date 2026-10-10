@@ -293,7 +293,11 @@ fun MainScreen(fragmentActivity: FragmentActivity) {
     fun backPage() { val valid = pageHistory.filter { PluginPages.registry.page(it) != null }; selectedPage = valid.lastOrNull() ?: PluginPages.registry.fallback(); pageHistory = valid.dropLast(1) }
     BackHandler(selectedPage.contains('/') || selectedPage == PluginPageRegistry.SERVICES || items.none { it.route == selectedPage }) { backPage() }
     val selectedTab = routes.indexOf(selectedPage).coerceAtLeast(0)
-    val selectedNavigationIndex = items.indexOfFirst { it.route == selectedPage }
+    val navigationParent = when (selectedPage) {
+        "app.grades" -> pageHistory.lastOrNull { previous -> items.any { it.route == previous } } ?: "app.courses"
+        else -> selectedPage
+    }
+    val selectedNavigationIndex = items.indexOfFirst { it.route == navigationParent }.coerceAtLeast(0)
     val navigationMotion = com.tyust.course.ui.theme.rememberNavigationMotionState(selectedTab, currentAccountStorageKey + routes.joinToString(), accessibility.reduceMotion)
     val barMotion = com.tyust.course.ui.theme.rememberNavigationMotionState(selectedNavigationIndex, currentAccountStorageKey + items.joinToString { it.route }, accessibility.reduceMotion)
     val pageRequest by PluginPages.requested.collectAsState()
@@ -439,10 +443,6 @@ fun MainScreen(fragmentActivity: FragmentActivity) {
     }
 
     val updateInfo = updateState.updateInfo()
-    SchoolAdaptationCompletionReminder(
-        enabled = !isDemoMode && !session.expired && startupOverlaysReady && !showStarDialog && !updateState.showDialog(),
-        accountScopeKey = currentAccountStorageKey
-    )
     GlassOverlayHost(modifier = Modifier.fillMaxSize()) {
         val useGlass = isBackdropSupported()
         // debug 平铺水印的开关。**它绝不能进任何 backdrop 捕获层**，见文件末尾
@@ -658,10 +658,7 @@ fun MainScreen(fragmentActivity: FragmentActivity) {
 
             // 底栏位于捕获层外，避免采样源包含底栏自身。
             CompositionLocalProvider(com.tyust.course.ui.theme.LocalNavigationMotion provides barMotion) {
-            if(com.tyust.course.scvtc.NextAppearance.theme.ui==cn.scvtc.campus.UiSystem.MIUIX && (com.tyust.course.scvtc.NextAppearance.theme.style!=cn.scvtc.campus.VisualStyle.ZHENGFANG || com.tyust.course.scvtc.NextAppearance.dockStyle==1)){
-              val readerBackdrop=readerDockBackdrop
-              cn.scvtc.campus.LiquidDock(selectedNavigationIndex,{index->items.getOrNull(index)?.let{openPage(it.route)}},readerBackdrop,com.tyust.course.scvtc.NextAppearance.theme,com.tyust.course.scvtc.NextAppearance.theme.effectiveDark(com.tyust.course.manager.AppThemeCoordinator.systemNight),Modifier.align(Alignment.BottomCenter).fillMaxWidth(),navBarMinimized,items.map{top.yukonga.miuix.kmp.basic.NavigationItem(it.label,icon=it.icon)}){navBarMinimized=false;navScrollIntent.reset()}
-            } else CapsuleNavigationBar(
+            CapsuleNavigationBar(
                 items = items,
                 selectedTab = selectedNavigationIndex,
                 onTabSelect = { targetTab ->
@@ -688,29 +685,12 @@ fun MainScreen(fragmentActivity: FragmentActivity) {
             )
 
             if(campusSettings)com.tyust.course.ui.system.GlassSubpage(onDismiss={campusSettings=false}){close->
-              Column {com.tyust.course.scvtc.NextButton("返回",Modifier.statusBarsPadding().padding(12.dp),close)
-               Box(Modifier.weight(1f)){com.tyust.course.scvtc.NextProfile(schoolRevision,onLogin={fragmentActivity.startActivity(Intent(fragmentActivity,LoginActivity::class.java))},onTools={campusTools=true},onSchedule={campusSettings=false;openPage("app.schedule")})}
-              }
+              com.tyust.course.scvtc.NextProfile(schoolRevision,onLogin={fragmentActivity.startActivity(Intent(fragmentActivity,LoginActivity::class.java))},onTools={campusTools=true},onSchedule={campusSettings=false;openPage("app.schedule")},onBack=close)
             }
             if(campusTools)com.tyust.course.ui.system.GlassSubpage(onDismiss={campusTools=false}){close->Column{com.tyust.course.scvtc.NextButton("返回",Modifier.statusBarsPadding().padding(12.dp),close);Box(Modifier.weight(1f)){com.tyust.course.scvtc.NextFileTools{fragmentActivity.startActivity(Intent(fragmentActivity,com.tyust.course.scvtc.ScvtcWebActivity::class.java))}}}}
             DialogHost(
                 state = dialogHostState,
                 modifier = Modifier.fillMaxSize()
-            )
-            if (showSurveyCenter) {
-                key(currentAccountStorageKey) {
-                    com.tyust.course.ui.system.GlassSubpage(onDismiss = { showSurveyCenter = false; initialSurveyId = null }) { close ->
-                        com.tyust.course.ui.route.SurveyCenterRoute(surveyRepository, onBack = close, initialSurveyId = initialSurveyId)
-                    }
-                }
-            }
-            com.tyust.course.ui.screen.SurveyReminder(
-                repository = surveyRepository,
-                canPresent = startupOverlaysReady && !session.expired && !showStarDialog && !updateState.showDialog() &&
-                    !dialogHostState.hasBlockingSurfaceExcept("survey-reminder") && !showSurveyCenter && selectedPage != "app.grab" &&
-                    (surveyUsagePreferences.noticeSeen || isDemoMode),
-                foreground = foreground,
-                onOpen = { id -> initialSurveyId = id; showSurveyCenter = true }
             )
 
             if (!session.expired && updateState.showDialog()) {

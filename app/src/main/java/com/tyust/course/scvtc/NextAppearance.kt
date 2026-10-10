@@ -44,13 +44,12 @@ object NextAppearance {
   persistence=persistenceScope.launch{delay(240);ScvtcRuntime.context.getSharedPreferences("next_appearance",0).edit().putString("theme",ScvtcRuntime.json.encodeToString(theme)).apply()}
  }
  fun updateDockStyle(value:Int){dockStyle=value;ScvtcRuntime.context.getSharedPreferences("next_appearance",0).edit().putInt("dockStyle",value).apply()}
- fun initialize(){val p=ScvtcRuntime.context.getSharedPreferences("next_appearance",0);dockStyle=p.getInt("dockStyle",0);theme=p.getString("theme",null)?.let{runCatching{ScvtcRuntime.json.decodeFromString<ThemeState>(it)}.getOrNull()}?:ThemeState(style=VisualStyle.ZHENGFANG);initialized=true;theme=theme.copy(mode=when(AppearanceSettingsManager.themeMode){AppThemeMode.System->ThemeMode.SYSTEM;AppThemeMode.Light->ThemeMode.LIGHT;AppThemeMode.Dark->ThemeMode.DARK});p.edit().putString("theme",ScvtcRuntime.json.encodeToString(theme)).apply()}
+ fun initialize(){val p=ScvtcRuntime.context.getSharedPreferences("next_appearance",0);theme=p.getString("theme",null)?.let{runCatching{ScvtcRuntime.json.decodeFromString<ThemeState>(it)}.getOrNull()}?:ThemeState(style=VisualStyle.ZHENGFANG);initialized=true;theme=theme.copy(ui=UiSystem.MIUIX,style=VisualStyle.ZHENGFANG,courseMaterial=0,mode=when(AppearanceSettingsManager.themeMode){AppThemeMode.System->ThemeMode.SYSTEM;AppThemeMode.Light->ThemeMode.LIGHT;AppThemeMode.Dark->ThemeMode.DARK});p.edit().putString("theme",ScvtcRuntime.json.encodeToString(theme)).apply()}
  fun receiveMode(value:AppThemeMode){if(!initialized)return;val mode=when(value){AppThemeMode.System->ThemeMode.SYSTEM;AppThemeMode.Light->ThemeMode.LIGHT;AppThemeMode.Dark->ThemeMode.DARK};if(theme.mode!=mode){theme=theme.copy(mode=mode);runCatching{ScvtcRuntime.context.getSharedPreferences("next_appearance",0).edit().putString("theme",ScvtcRuntime.json.encodeToString(theme)).apply()}}}
  fun update(t:ThemeState){
   val previous=theme;if(previous==t)return
   theme=t;persistTheme()
   if(t.mode!=previous.mode)AppearanceSettingsManager.updateThemeMode(when(t.mode){ThemeMode.SYSTEM->AppThemeMode.System;ThemeMode.LIGHT->AppThemeMode.Light;ThemeMode.DARK->AppThemeMode.Dark})
-  if(t.ui!=previous.ui || t.style!=previous.style)AppearanceSettingsManager.updateGlassEffect(t.ui==UiSystem.MIUIX && t.style!=VisualStyle.CLASSIC)
  }
 }
 @Composable fun NextTheme(content: @Composable () -> Unit) {
@@ -114,8 +113,6 @@ object NextAppearance {
  val backdrop=LocalControlBackdrop.current
  val optics=rememberInteractiveOptics()
  val shape=RoundedCornerShape(when(NextAppearance.theme.style){VisualStyle.CLASSIC->if(interactive)12.dp else 14.dp;VisualStyle.SLEEPDOWN->28.dp;VisualStyle.ZHENGFANG->if(interactive)18.dp else 22.dp})
- if(NextAppearance.theme.ui==UiSystem.MIUIX && (NextAppearance.theme.style==VisualStyle.CLASSIC || !AppearanceSettingsManager.glassEffectEnabled))
-  return this.background(MaterialTheme.colorScheme.surface,shape)
  return if(NextAppearance.theme.ui==UiSystem.MIUIX && backdrop!=null && isBackdropSupported())
   this.liquidChip(backdrop,shape,optics,enabled=enabled,interactive=interactive,
    appearance=if(interactive)GlassChipAppearance.Default else GlassChipAppearance.BlurredPanel,

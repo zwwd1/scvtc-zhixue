@@ -34,7 +34,7 @@ import com.tyust.course.ui.system.glass.LiquidActionGroupScope
 
 object TopBarLayoutMetrics {
     val TouchTarget = 48.dp
-    val VisualSize = 34.dp
+    val VisualSize = 40.dp
     val IconSize = 20.dp
     val ActionSpacing = 4.dp
     val DragTravel = 2.dp
@@ -67,7 +67,7 @@ internal fun TopBarActionItem(
         contentAlignment = Alignment.Center
     ) {
         Box(Modifier.size(TopBarLayoutMetrics.VisualSize)
-            .adaptiveGlassChip(backdrop, CircleShape, optics, enabled = enabled, interactive = enabled))
+            .adaptiveGlassChip(backdrop, androidx.compose.foundation.shape.RoundedCornerShape(18.dp), optics, enabled = enabled, interactive = enabled))
         Box(Modifier.fillMaxSize().graphicsLayer {
             if (!reduced) applyChipContentDeformation(optics, 2.dp.toPx(), 0.02f, 0.02f, GlassRecipe.ChipContentDeformDamping)
         }, contentAlignment = Alignment.Center) { content() }

@@ -51,6 +51,7 @@ import com.kyant.backdrop.backdrops.rememberLayerBackdrop
 import com.tyust.course.schedule.ScheduleDates
 import com.tyust.course.schedule.ScheduleMaxWeeks
 import com.tyust.course.ui.system.*
+import com.tyust.course.scvtc.nextGlassSurface
 import com.tyust.course.ui.system.glass.LocalGlassLensAnchor
 import com.tyust.course.ui.system.glass.LocalPageGlassFreshness
 import com.tyust.course.ui.system.glass.drawBackdropSource
@@ -186,17 +187,16 @@ fun WeekHeaderCompact(
                         SystemMenuAction("课表设置", Icons.Outlined.Settings, onSettingsClick)
                     ), Modifier.testTag("schedule-more"), trigger = { toggle ->
                         Box(Modifier.size(48.dp), contentAlignment = Alignment.Center) {
-                            LiquidButton(toggle, backdrop = controlBackdrop, modifier = Modifier.size(40.dp),
-                                minHeight = 40.dp, horizontalPadding = 0.dp) {
+                            top.yukonga.miuix.kmp.basic.IconButton(onClick = toggle,
+                                modifier = Modifier.size(40.dp).nextGlassSurface()) {
                                 AnimatedLineIcon(AnimatedIconSpec.More, Modifier.size(21.dp), description = "更多课表操作",
                                     tint = appearance.onSurface)
                             }
                         }
                     })
                     Box(Modifier.size(44.dp), contentAlignment = Alignment.Center) {
-                        LiquidButton(onClick = { if(!sync.busy)onSyncClick() }, enabled = !sync.busy,
-                            backdrop = controlBackdrop, modifier = Modifier.size(40.dp).testTag("schedule-refresh"),
-                            minHeight = 40.dp, horizontalPadding = 0.dp) {
+                        top.yukonga.miuix.kmp.basic.IconButton(onClick = { if(!sync.busy)onSyncClick() }, enabled = !sync.busy,
+                            modifier = Modifier.size(40.dp).testTag("schedule-refresh").nextGlassSurface(enabled = !sync.busy)) {
                             AnimatedLineIcon(AnimatedIconSpec.Refresh, Modifier.size(21.dp),
                                 state = if(sync.busy)IconVisualState.Running else IconVisualState.Idle,
                                 description = if(sync.busy)"正在同步课表" else "刷新课表",

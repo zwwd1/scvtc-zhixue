@@ -128,6 +128,7 @@ import com.tyust.course.ui.system.GlassRecipe
 import com.tyust.course.ui.system.LocalAppBackdrop
 import com.tyust.course.ui.system.LocalControlBackdrop
 import com.tyust.course.ui.system.isBackdropSupported
+import com.tyust.course.ui.system.isRuntimeLensEnabled
 import com.tyust.course.ui.system.glass.LiquidActionGroup
 import com.tyust.course.ui.system.glass.glassRim
 import com.tyust.course.ui.system.glass.resolvePhysicalLens
@@ -659,8 +660,8 @@ fun CourseCard(course: ScheduleCourseUi, onLongClick: () -> Unit = {}, onClick: 
                     if (unknownWeeks) "周次待核对" else null).joinToString("，")
             }
             .scale(scale)
-            .then(if(glassEnabled && appearance.courseMaterial!=2 && backdrop!=null && isBackdropSupported())Modifier.drawBackdrop(
-                backdrop=backdrop,shape={shape},effects={vibrancy();blur(appearance.courseCardBlur.dp.toPx());if(appearance.courseMaterial==0)lens(4.dp.toPx(),2.dp.toPx())}
+            .then(if(backdrop!=null && isBackdropSupported())Modifier.drawBackdrop(
+                backdrop=backdrop,shape={shape},effects={vibrancy();blur((if(glassEnabled)appearance.courseCardBlur else maxOf(12f,appearance.courseCardBlur)).dp.toPx());if(isRuntimeLensEnabled())lens(4.dp.toPx(),2.dp.toPx())}
             )else Modifier)
             .combinedClickable(
                 interactionSource = interactionSource,

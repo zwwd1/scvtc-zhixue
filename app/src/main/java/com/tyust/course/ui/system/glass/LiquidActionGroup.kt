@@ -128,7 +128,7 @@ fun LiquidActionGroup(
     } else {
         GlassRecipe.ChipRimAlphaDark
     }
-    val allowMerge = mergeEnabled && !accessibility.reduceMotion
+    val allowMerge = mergeEnabled && !accessibility.reduceMotion && com.tyust.course.manager.AppearanceSettingsManager.glassEffectEnabled
 
     val scope = remember(bounds, enabledFlags, presenceFlags, animationScope, backdrop) {
         object : LiquidActionGroupScope {

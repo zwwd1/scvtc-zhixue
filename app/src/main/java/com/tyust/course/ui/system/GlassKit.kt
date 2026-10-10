@@ -75,7 +75,6 @@ private val GlassRowShape = RoundedCornerShape(16.dp)
 internal fun glassSurfaceColor(): Color {
     val highContrast = rememberGlassAccessibilityMode().highContrast
     val appearance = LocalWallpaperAppearanceColors.current
-    if (!com.tyust.course.manager.AppearanceSettingsManager.glassEffectEnabled) return MaterialTheme.colorScheme.surface
     return if (!rememberGlassDarkTheme()) {
         Color.White.copy(alpha = if (highContrast) 0.96f else if (appearance.usesDarkForeground) 0.62f else 0.90f)
     } else {
@@ -174,7 +173,9 @@ fun InsetGroupedSection(
             modifier = Modifier
                 .fillMaxWidth()
                 .clip(GlassCardShape)
-                .background(glassSurfaceColor())
+                .then(if (com.tyust.course.manager.AppearanceSettingsManager.glassEffectEnabled)
+                    Modifier.background(glassSurfaceColor())
+                    else Modifier.frostedContentSurface(GlassCardShape, appearance = themedSurfaceAppearance()))
                 .border(0.5.dp, glassBorderColor(), GlassCardShape)
                 .animateContentSize(animationSpec = MotionSpring.liquidSettle()),
             content = content

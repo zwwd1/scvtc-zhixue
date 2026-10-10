@@ -118,9 +118,6 @@ fun rememberWallpaperRegionAppearance(
         )
     }
 
-    if (!AppearanceSettingsManager.glassEffectEnabled) return if (darkTheme) WallpaperAppearanceColors(
-        Color(0xFF171B22), Color(0xFF171B22), Color(0xFFF6F7FB), Color(0xFFB3BDCC), Color(0xFF424854), false
-    ) else WallpaperAppearanceColors.Light.copy(surface = Color(0xFFE9E9EE))
     if (darkTheme && AppearanceSettingsManager.mode == com.tyust.course.manager.WallpaperMode.Preset) return WallpaperAppearanceColors(
         surface = Color(0xFF171B22).copy(alpha = if (resolved.usesDarkForeground) 0.88f else 0.78f),
         solidSurface = Color(0xFF171B22),

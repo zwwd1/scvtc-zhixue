@@ -530,20 +530,6 @@ fun LoginScreen(
 
                         Spacer(modifier = Modifier.height(24.dp))
 
-                        TextButton(
-                            onClick = onSchoolAdaptation,
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Text(
-                                text = "申请 / 查看统一登录适配",
-                                style = MaterialTheme.typography.labelLarge,
-                                color = NeuPrimary,
-                                fontWeight = FontWeight.SemiBold
-                            )
-                        }
-
-                        Spacer(modifier = Modifier.height(8.dp))
-
                         com.tyust.course.ui.system.SystemSecondaryButton(text = "管理本机绑定名额", onClick = onManageBindings, enabled = !isLoading, modifier = Modifier.fillMaxWidth())
                         TextButton(onClick = onServiceCenter, modifier = Modifier.fillMaxWidth()) { Text("打开服务中心与通用工具") }
                         // Demo Mode Button

@@ -7,6 +7,7 @@ import androidx.compose.ui.graphics.drawscope.withTransform
 import com.tyust.course.ui.system.glass.GlassLensContentSnapshot
 
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.SpringSpec
 import androidx.compose.animation.core.EaseOut
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
@@ -86,6 +87,8 @@ import com.kyant.backdrop.shadow.InnerShadow
 import com.kyant.backdrop.shadow.Shadow
 import com.kyant.shapes.Capsule
 import com.tyust.course.BottomNavItem
+import cn.scvtc.campus.ThemeState
+import com.tyust.course.scvtc.NextAppearance
 import com.tyust.course.ui.system.glass.DampedDragAnimation
 import com.tyust.course.ui.system.glass.GlassLensFreshness
 import com.tyust.course.ui.system.glass.GlassLensTransform
@@ -184,6 +187,21 @@ object NavBarMetrics {
  */
 private const val NavIndicatorRefractionFloor = 0f
 
+/** Defaults preserve the native recipe, including the sharp selected lens. */
+private fun GlassMaterialSpec.withNavigationAppearance(settings: ThemeState, track: Boolean) = copy(
+    blurDp = if (track) settings.navigationBlurDp ?: blurDp else blurDp,
+    refractionHeightDp = refractionHeightDp * settings.navigationRefractionScale,
+    refractionAmountDp = refractionAmountDp * settings.navigationRefractionScale,
+    optics = optics.copy(chromaticAberration = optics.chromaticAberration && settings.navigationDispersion)
+)
+
+private fun navigationSpring(spec: SpringSpec<Float>, stiffnessScale: Float): SpringSpec<Float> =
+    if (stiffnessScale == 1f) spec else SpringSpec(
+        dampingRatio = spec.dampingRatio,
+        stiffness = spec.stiffness * stiffnessScale,
+        visibilityThreshold = spec.visibilityThreshold
+    )
+
 @Composable
 fun CapsuleNavigationBar(
     items: List<BottomNavItem>,
@@ -230,7 +248,7 @@ fun CapsuleNavigationBar(
                 // 滚动最小化：整条玻璃横向收拢淡出，单胶囊液态弹出
                 val minimizeFraction by animateFloatAsState(
                     targetValue = if (minimized) 1f else 0f,
-                    animationSpec = MotionSpring.liquidSettle(),
+                    animationSpec = navigationSpring(MotionSpring.liquidSettle(), NextAppearance.theme.navigationSpringScale),
                     label = "navMinimizeFraction"
                 )
                 if (minimizeFraction < 0.999f) {
@@ -305,10 +323,10 @@ private fun MinimizedNavCapsule(
                 shape = { Capsule() },
                 effects = {
                     vibrancy()
-                    blur(8.dp.toPx())
+                    blur((NextAppearance.theme.navigationBlurDp ?: 8f).dp.toPx())
                 },
-                highlight = { Highlight.Default.copy(alpha = 0.14f) },
-                shadow = { Shadow(alpha = 0.10f) },
+                highlight = { Highlight.Default.copy(alpha = 0.14f * NextAppearance.theme.navigationHighlightScale) },
+                shadow = { Shadow(alpha = 0.10f * NextAppearance.theme.navigationShadowScale) },
                 onDrawSurface = { drawRect(containerColor) }
             )
             .clip(RoundedCornerShape(percent = 50))
@@ -359,9 +377,10 @@ private fun GlassNavigationBar(
     // 下游的文字。底图的模糊层由锚点自己铺满重画，理由见 lensAnchor 处。
     val tabsTintSnapshot = remember { GlassLensContentSnapshot() }
     val accessibility = rememberGlassAccessibilityMode()
+    val navigationAppearance = NextAppearance.theme
     val latestOnTabSelect by rememberUpdatedState(onTabSelect)
     // 平台是否真出折射/色散（API 33+）
-    val hasRealLens = isRuntimeShaderTrulySupported()
+    val hasRealLens = isRuntimeLensEnabled()
     // API31/32 是否走自家离屏 GL 折射。isGlassLensApplicable() 只在 31/32 为真，
     // 所以下面每一处 `useOffscreenLens` 分支都进不了 33+，也进不了 ≤30。
     val useOffscreenLens = isGlassLensApplicable()
@@ -403,12 +422,12 @@ private fun GlassNavigationBar(
         role = GlassMaterialRole.Navigation,
         accessibility = accessibility,
         interactionProgress = 0f
-    )
+    ).withNavigationAppearance(navigationAppearance, track = true)
     val indicatorMaterial = GlassMaterials.resolve(
         role = GlassMaterialRole.Interactive,
         accessibility = accessibility,
         interactionProgress = 0f
-    )
+    ).withNavigationAppearance(navigationAppearance, track = false)
     val pressedScale = if (hasRealLens) {
         GlassRecipe.NavPressedScale
     } else {
@@ -442,7 +461,7 @@ private fun GlassNavigationBar(
     // 东西"，差一档模糊，折射里的内容就和屏幕上的对不上。
     //
     // 有折射外观时取配方的 10dp（33+ 一直是这个值），≤30 保留 cba2a09 的 8dp。
-    val trackBlurDp = if (hasLensLook) barMaterial.blurDp else GlassRecipe.NavLegacyTrackBlurDp
+    val trackBlurDp = navigationAppearance.navigationBlurDp ?: if (hasLensLook) barMaterial.blurDp else GlassRecipe.NavLegacyTrackBlurDp
     val trackBlurPx = with(outerDensity) { trackBlurDp.dp.toPx() }
     val lensAnchor = rememberGlassLensAnchor(tag = "navbar", rasterizeOverlayOnCpu = true, overlaySource = { coords ->
         tabsTintSnapshot.draw(this, coords)
@@ -535,7 +554,7 @@ private fun GlassNavigationBar(
 
         val animationScope = rememberCoroutineScope()
         var currentIndex by remember { mutableIntStateOf(selectedTab) }
-        val dampedDragAnimation = remember(animationScope, tabsCount) {
+        val dampedDragAnimation = remember(animationScope, tabsCount, navigationAppearance.navigationSpringScale) {
             DampedDragAnimation(
                 animationScope = animationScope,
                 initialValue = selectedTab.toFloat(),
@@ -543,8 +562,8 @@ private fun GlassNavigationBar(
                 visibilityThreshold = 0.001f,
                 initialScale = 1f,
                 pressedScale = pressedScale,
-                settleAnimationSpec = MotionSpring.navSettle(),
-                releaseScaleAnimationSpec = MotionSpring.navRelease(),
+                settleAnimationSpec = navigationSpring(MotionSpring.navSettle(), navigationAppearance.navigationSpringScale),
+                releaseScaleAnimationSpec = navigationSpring(MotionSpring.navRelease(), navigationAppearance.navigationSpringScale),
                 onDragStarted = {},
                 onDragStopped = {
                     val targetIndex = targetValue
@@ -554,7 +573,7 @@ private fun GlassNavigationBar(
                     onTabSelect(targetIndex)
                     animateToValue(targetIndex.toFloat())
                     animationScope.launch {
-                        offsetAnimation.animateTo(0f, MotionSpring.liquidJellyRebound())
+                        offsetAnimation.animateTo(0f, navigationSpring(MotionSpring.liquidJellyRebound(), navigationAppearance.navigationSpringScale))
                     }
                 },
                 onDrag = { _, dragAmount ->
@@ -607,7 +626,7 @@ private fun GlassNavigationBar(
                                 pressScalesRefraction = false
                             )
                             if (params.blurPx > 0f) blur(params.blurPx)
-                            else blur(8.dp.toPx())
+                            else if (navigationAppearance.navigationBlurDp == null) blur(8.dp.toPx())
                             if (params.useLens) {
                                 lens(
                                     refractionHeight = params.refractionHeightPx,
@@ -624,11 +643,11 @@ private fun GlassNavigationBar(
                         // 描边与投影不需要 AGSL（Highlight/Shadow 都是 Compose 侧绘制），
                         // 之前按 hasRealLens 关掉是把它们当成了"33+ 才合理的增强"。
                         // 结果 32 上的轨道没有轮廓，直接融进壁纸 —— 见用户截图。
-                        if (hasLensLook) Highlight.Default.copy(alpha = 0.16f) else null
+                        if (hasLensLook) Highlight.Default.copy(alpha = 0.16f * navigationAppearance.navigationHighlightScale) else null
                     },
                     shadow = {
                         if (hasLensLook) {
-                            Shadow(alpha = 0.08f)
+                            Shadow(alpha = 0.08f * navigationAppearance.navigationShadowScale)
                         } else {
                             // cba2a09：轨道无投影
                             null
@@ -752,7 +771,7 @@ private fun GlassNavigationBar(
                                     animationScope.launch {
                                         offsetAnimation.animateTo(
                                             0f,
-                                            MotionSpring.liquidJellyRebound()
+                                            navigationSpring(MotionSpring.liquidJellyRebound(), navigationAppearance.navigationSpringScale)
                                         )
                                     }
                                 }
@@ -812,7 +831,7 @@ private fun GlassNavigationBar(
                                 pressScalesRefraction = false
                             )
                             if (params.blurPx > 0f) blur(params.blurPx)
-                            else blur(8.dp.toPx())
+                            else if (navigationAppearance.navigationBlurDp == null) blur(8.dp.toPx())
                             if (params.useLens) {
                                 lens(
                                     refractionHeight = params.refractionHeightPx,
@@ -827,7 +846,7 @@ private fun GlassNavigationBar(
                     },
                     highlight = {
                         // 该层被选中透镜采样，白环压低避免折射进胶囊形成白圈
-                        Highlight.Default.copy(alpha = dampedDragAnimation.pressProgress * 0.35f)
+                        Highlight.Default.copy(alpha = dampedDragAnimation.pressProgress * 0.35f * navigationAppearance.navigationHighlightScale)
                     },
                     onDrawSurface = {
                         drawRect(containerColor)
@@ -951,7 +970,7 @@ private fun GlassNavigationBar(
                                     chromaticAberration = params.chromaticAberration
                                 )
                             }
-                        } else if (lensAnchor == null) {
+                        } else if (hasLensLook && lensAnchor == null) {
                             // 既无 AGSL 也无离屏折射（API ≤ 30）：只剩 RGB 分离近似。
                             // lens() 在这些平台上是 no-op，留着只是为了形状校验路径一致。
                             lens(
@@ -982,30 +1001,30 @@ private fun GlassNavigationBar(
                             Highlight.Default.copy(
                                 width = Highlight.Default.width / scaleComp,
                                 blurRadius = Highlight.Default.blurRadius / scaleComp,
-                                alpha = 0.12f + progress * 0.35f
+                                alpha = (0.12f + progress * 0.35f) * navigationAppearance.navigationHighlightScale
                             )
                         } else {
                             // 按压渐显边缘高光（压低亮度，避免白圈）
                             Highlight.Default.copy(
                                 width = Highlight.Default.width / scaleComp,
-                                alpha = progress * 0.35f
+                                alpha = progress * 0.35f * navigationAppearance.navigationHighlightScale
                             )
                         }
                     },
                     shadow = {
                         val progress = dampedDragAnimation.pressProgress
                         if (hasLensLook) {
-                            Shadow(alpha = 0.10f + progress * 0.15f)
+                            Shadow(alpha = (0.10f + progress * 0.15f) * navigationAppearance.navigationShadowScale)
                         } else {
                             // 按压渐显投影（减半，滑动残影更轻）
-                            Shadow(alpha = progress * 0.5f)
+                            Shadow(alpha = progress * 0.5f * navigationAppearance.navigationShadowScale)
                         }
                     },
                     innerShadow = {
                         val progress = dampedDragAnimation.pressProgress
                         InnerShadow(
                             radius = 4.dp * progress,
-                            alpha = progress * 0.5f
+                            alpha = progress * 0.5f * navigationAppearance.navigationShadowScale
                         )
                     },
                     layerBlock = {

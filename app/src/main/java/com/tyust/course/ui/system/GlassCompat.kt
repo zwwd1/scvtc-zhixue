@@ -20,12 +20,10 @@ enum class GlassCapability {
 }
 
 fun currentGlassCapability(): GlassCapability = when {
-    // 用户在设置里显式关掉：直接落到 Material，走各组件已有的不透明回退分支
-    // （低于 API 31 的设备一直走那条路径，不需要新写任何渲染分支）。
-    // 读的是 Compose state，而 isBackdropSupported() 都在组合期被调用，拨动即时重绘。
-    !AppearanceSettingsManager.glassEffectEnabled -> GlassCapability.Material
     Build.VERSION.SDK_INT < Build.VERSION_CODES.S -> GlassCapability.StaticGlass
     !GlassRuntimeGuard.isBackdropEnabled() -> GlassCapability.Material
+    // Gaussian blur still samples the wallpaper; only the liquid optics are disabled.
+    !AppearanceSettingsManager.glassEffectEnabled -> GlassCapability.Backdrop
     // 实验期：Android 12（API 31/32）也进入 lens 尝试路径，不预先按版本屏蔽。
     // 库内部 isRuntimeShaderSupported() 仍会在 <33 时 no-op，属于平台能力上限。
     GlassRuntimeGuard.isDynamicOpticsEnabled() -> GlassCapability.DynamicLens

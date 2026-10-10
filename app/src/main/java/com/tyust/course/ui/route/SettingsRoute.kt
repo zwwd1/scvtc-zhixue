@@ -347,7 +347,7 @@ fun SettingsRoute(
         academicSystemName = com.tyust.course.academic.AcademicCapabilities.name(UserManager.getInstance().currentSchool?.academicSystem),
         onAcademicSupport = { showAcademicSupport = true },
         onAcademicPlugins = { context.startActivity(Intent(context, com.tyust.course.academic.plugin.PluginCenterActivity::class.java)) },
-        onCampusServices = { context.startActivity(Intent(context, com.tyust.course.academic.plugin.CampusServiceCenterActivity::class.java)) },
+        onCampusServices = { com.tyust.course.scvtc.CampusNavigation.request.value = "app.services" },
         onQuickFeedback = { com.tyust.course.academic.plugin.PluginFeedback.open(context) }
     )
     if (showAcademicSupport) com.tyust.course.ui.screen.AcademicSupportDialog(
@@ -424,6 +424,7 @@ fun SettingsRoute(
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
                 val updates = listOf(
+                    "1.2.0 · 2026-10-10" to "统一顶栏按钮、壁纸与外观入口。液态玻璃关闭后全应用使用高斯模糊，移除重复材质与底栏选择。修复同步子页遮挡和成绩页底栏，精简课程首页，移除问卷、插件和统一登录适配入口，反馈改为本项目 GitHub。加入可配置的 AI 助手，密钥与对话在本机加密，课表上下文需单独授权。使用原创川职月光壁纸与小澄五种状态，保留完整动效与已有用户数据，云服务继续暂停。",
                     "1.1.0 · 2026-10-09" to "精简本校服务中心为课表、成绩、学分三个入口，其他业务进入独立官网浏览器。修复官网新窗口、页面标题与返回历史，增加真实同步进度和右上角液态玻璃刷新。完善学期筛选、学分去重、本机加密查询缓存、壁纸裁剪和独立卡片材质。更新二次元头像图标、小澄多状态互动与赞赏原图，保留原生能力和动效，云服务继续暂停。",
                     "1.0.0 · 第一版" to "川职·知学：保留原生课表、成绩、考试和插件能力；本校接入真实 JSON 接口，自动同步课表、学生信息、成绩、考试安排、等级考试查询与毕业学分要求。完善本机加密登录和教务会话恢复；保留三套外观和液态玻璃交互。云服务暂停，本机数据与本地备份继续使用。"
                 )

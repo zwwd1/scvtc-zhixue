@@ -285,13 +285,6 @@ class LoginActivity : ComponentActivity() {
                     }
                 )
                 }
-                SchoolAdaptationCompletionReminder(
-                    enabled = !showSchoolAdaptation &&
-                        !showBindingDialog &&
-                        captchaImageBytes == null &&
-                        !isLoading &&
-                        !isAutoValidating
-                )
                 if (showBindingManager) com.tyust.course.ui.system.BindingManagementDialog { showBindingManager = false }
                 com.tyust.course.ui.screen.UsageNotice()
             }

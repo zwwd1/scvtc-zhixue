@@ -77,6 +77,8 @@ __pycache__/
 /tools/
 /docs/*
 !/docs/images/
+!/docs/BRANDING_20261010.md
+!/docs/OPTIMIZATION_20261010.md
 /pic/
 /api.md
 /退课API技术文档.md

@@ -213,6 +213,8 @@ object WallpaperImageStore {
         return out
     }
 
+    internal fun analyzeBitmap(bitmap: Bitmap): WallpaperToneMap = buildToneMap(bitmap, bitmap)
+
     private fun buildToneMap(sharp: Bitmap, soft: Bitmap): WallpaperToneMap {
         fun grid(bitmap: Bitmap): IntArray {
             val analysis = Bitmap.createScaledBitmap(

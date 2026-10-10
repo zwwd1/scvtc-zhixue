@@ -67,6 +67,8 @@ private const val TAG = "GlassLens"
 
 /** 只在 31/32 生效：33+ 走平台 AGSL，30 及以下连 RenderEffect 都没有。 */
 fun isGlassLensApplicable(): Boolean =
+    com.tyust.course.manager.AppearanceSettingsManager.glassEffectEnabled &&
+        com.tyust.course.ui.system.GlassRuntimeGuard.isDynamicOpticsEnabled() &&
     Build.VERSION.SDK_INT >= Build.VERSION_CODES.S &&
         Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU
 

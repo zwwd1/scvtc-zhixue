@@ -2,6 +2,7 @@ package com.tyust.course.ui.system
 
 import androidx.compose.runtime.*
 import androidx.compose.foundation.background
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.ui.Modifier
@@ -20,7 +21,7 @@ fun GlassSubpage(onDismiss: () -> Unit, content: @Composable (close: () -> Unit)
         DisposableEffect(host) {
             val owner = host.show({ currentDismiss() }, DialogPresentation.Page, saveableKey = saveableKey) {
                 CompositionLocalProvider(LocalAppOverlayBottomInset provides 0.dp, LocalFloatingNotice provides null) {
-                    GlassWindowHost { Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)){currentContent { host.dismiss(handle) }} }
+                    GlassWindowHost { WallpaperSubpage { currentContent { host.dismiss(handle) } } }
                 }
             }
             handle = owner
@@ -28,7 +29,16 @@ fun GlassSubpage(onDismiss: () -> Unit, content: @Composable (close: () -> Unit)
         }
     } else {
         Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
-            GlassWindowHost { Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)){currentContent { currentDismiss() }} }
+            GlassWindowHost { WallpaperSubpage { currentContent { currentDismiss() } } }
         }
+    }
+}
+
+@Composable
+private fun WallpaperSubpage(content: @Composable () -> Unit) {
+    val wallpaper = com.tyust.course.ui.theme.rememberAppWallpaperStyle()
+    Box(Modifier.fillMaxSize()) {
+        Canvas(Modifier.matchParentSize()) { drawWallpaperPattern(wallpaper, microTexture = false) }
+        content()
     }
 }

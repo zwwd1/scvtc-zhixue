@@ -1,57 +1,43 @@
 # 川职·知学
 
-四川职业技术学院非官方 Android 应用，维护：**zwwd1**。本项目 `1.0.0` 为第一版，与原项目版本记录分别维护。
+四川职业技术学院非官方 Android 应用，由 **zwwd1** 维护。1.0.0 是本项目第一版，当前维护版为 **1.2.0**。知学保留原生课表、成绩卡片、考试、提醒和小组件，服务中心只显示课表、成绩、学分，其他业务通过学校官方教务页面办理。
 
-知学保留原生课表、课程编辑、提醒、小组件和插件中心，接入川职官方 CAS 与教务 JSON 接口。首次登录后，在本机加密保存已验证的凭据；之后检查 Session，必要时恢复认证并继续同步。学校要求补充验证时，仍需本人完成。
+## 1.2.0
 
-## 1.1.0 维护版
+合并外观入口，顶栏按钮、子页壁纸、课表与底栏统一风格。液态玻璃关闭后全应用使用高斯模糊。修复同步页遮挡和成绩底栏，精简首页，移除问卷、插件、统一登录适配入口，加入本机加密的 AI 配置与对话。使用原创川职月光和小澄五种状态。
 
-本校服务中心只保留课表、成绩、学分三个主要入口，其他业务进入独立的学校官网浏览器。修复真实新窗口、页面标题和历史恢复，补齐实时同步、右上角液态玻璃刷新、学期筛选、学分口径、加密查询缓存、壁纸裁剪和独立卡片材质。保留原生课表与插件能力。按用户二次元参考生成新头像图标与小澄五种状态。
+[按本次 IMG-01～IMG-17 的修改与验收](docs/OPTIMIZATION_20261010.md) · [原创素材](docs/BRANDING_20261010.md)。本轮不连接手机、不执行功能或性能测试，编译和签名不能代替实际体验。历史验收保留在对应日期报告中。
 
-[按图片逐项的修改与验收](docs/OPTIMIZATION_20261009.md) · [生图素材与提示词](docs/BRANDING_20261009.md)。[1.1.0 源码分支](https://github.com/zwwd1/scvtc-zhixue/tree/codex/unified-optimization-20261009)。本轮 APK 在本机以原签名打包，含用户指定的赞赏原图；为避免公开支付资料，原图和这批 APK 不进入公开 Git。下方 1.0.0 为保留的历史第一版，不能当作本轮修复产物。
+## 下载
 
-## 下载与验证
+- [1.2.0 原签名 APK](https://github.com/zwwd1/scvtc-zhixue/releases/download/v1.2.0/scvtc-zhixue-1.2.0.apk) · [SHA-256](https://github.com/zwwd1/scvtc-zhixue/releases/download/v1.2.0/scvtc-zhixue-1.2.0.apk.sha256)
+- [1.2.0 发布页](https://github.com/zwwd1/scvtc-zhixue/releases/tag/v1.2.0) · [对应源码](https://github.com/zwwd1/scvtc-zhixue/archive/refs/tags/v1.2.0.zip)
+- [构建与签名对应关系](BUILD_PROVENANCE.json) · [验证范围](VERIFICATION.md)
 
-- [1.0.0 原签名 APK](https://raw.githubusercontent.com/zwwd1/scvtc-zhixue/main/dist/scvtc-campus-next-1.0.0.apk) · [SHA-256](dist/scvtc-campus-next-1.0.0.apk.sha256)
-- [完整源码](https://github.com/zwwd1/scvtc-zhixue/archive/refs/heads/main.zip) · [验证记录](VERIFICATION.md) · [源码与 APK 对应关系](BUILD_PROVENANCE.json)
-- 最低 Android 13；覆盖安装请保留应用数据。仓库源码不含原签名私钥，自行使用其他私钥打包不能覆盖此 APK。
+最低 Android 13。已有安装请直接覆盖，保留应用数据；不要先卸载。自行更换签名的构建不能覆盖本项目原签名 APK。
 
-## 使用入口
+## 使用与原理
 
-| 需要什么 | 说明 |
+首次在官方 CAS 完成登录，App 继续建立教务 Session，并用需要学生身份的真实 JSON API 核验。成功后加密保存认证，再次启动检查 Session；过期时恢复 SSO 或使用本机凭据重建认证，再继续同步。登录 URL 到达主页不能单独证明成功。学校密码变更或额外验证仍需本人处理，失败保留最后成功数据。
+
+| 需要什么 | 入口 |
 | --- | --- |
-| 首次安装与登录 | [使用方法](docs/SCVTC_USAGE.md) |
-| 自动登录和数据来源 | [构建原理与接口](docs/SCVTC_ARCHITECTURE.md) |
-| 本机加密、联网和删除 | [隐私说明](docs/SCVTC_PRIVACY.md) |
-| 编译 APK 与原签名升级 | [构建说明](docs/SCVTC_ARCHITECTURE.md#构建) |
+| 安装、登录和日常操作 | [使用方法](docs/SCVTC_USAGE.md) |
+| 认证、真实接口、缓存和编译 | [构建原理](docs/SCVTC_ARCHITECTURE.md) |
+| 本机加密、网络和数据删除 | [隐私说明](docs/SCVTC_PRIVACY.md) |
 | 问题反馈 | [本项目 Issues](https://github.com/zwwd1/scvtc-zhixue/issues) |
-| 轻量课表应用 | [川职·课间](https://github.com/zwwd1/scvtc-kejian) |
+| 轻量课表 | [川职·课间](https://github.com/zwwd1/scvtc-kejian) |
 
-## 本校功能
+成绩与学分使用学校真实 JSON，保留实际学期和完整分页；毕业要求与成绩所得分开，未知字段不作为假零值。学校接口未核验的功能使用明确的官网入口，不编造通知、成绩或课表。
 
-| 功能 | 实现与边界 |
-| --- | --- |
-| 学生身份、当前学期、课表 | 原生 HTTP 读取，匹配学生身份后缓存，支持离线查看 |
-| 学期列表 | 使用官方返回的实际列表 |
-| 成绩 | 完整分页、实际学期筛选与账号隔离缓存；本轮真机取得 39 条真实成绩 |
-| 学分 | 官方毕业要求与成绩所得分开；按课程代码合并重修，不虚构 GPA 或毕业资格 |
-| 通知、请假等 | 尚未完成本校接口核验，使用明确的官方入口 |
-| 其他学校插件 | 保留原有平台；不代表经过本项目逐校测试 |
+## 数据与构建
 
-学生主页的 Hash 路由只用于页面导航，不能当成后端接口。URL 到达主页也不能证明登录成功：必须取得需要身份的学生 JSON，并匹配当前账号。
+学校凭据由 Android Keystore 与 AES-256-GCM 保护，服务查询缓存按账号、学期和模块加密。普通课表 Room 数据依靠应用沙箱与设备存储加密，不宣称 SQLCipher 全库加密。**云同步与匿名统计暂停**。系统自动备份关闭；个人导出由用户主动操作。
 
-## 数据与隐私
+学校认证与接口位于 cn/scvtc/campus，同步和 UI 位于 com/tyust/course/scvtc，school-core 负责数据规则。AI Key 与历史在 noBackupFilesDir 中 AES-GCM 加密，只有用户启用课表授权才向配置的模型服务发送课程上下文。使用 JDK 21、Android SDK 37.0 和项目 Gradle Wrapper 构建。原签名配置通过仓库外环境变量提供；私钥、密码、个人截图和原始学校响应不进入源码。
 
-密码、表单绑定和认证备份由 **Android Keystore + AES-256-GCM** 保护，不进入公开源码、明文日志、APK 资源或普通课表导出。服务 JSON 缓存使用账号、学期和模块关联的 AES-GCM；旧明文缓存兼容读取，在下次成功同步时加密替换。普通课程 Room 数据仍由 Android 沙箱和设备加密保护，不称为 SQLCipher 全库加密。
+发布工作流只重组已签名的本机 APK，核对 SHA-256、包名、版本、原证书和嵌入的源码提交，不接触 Android 私钥。正式 Release 标签指向 APK 对应源码，更新清单在发布文件可用后更新。
 
-**云同步与匿名统计暂停。** 系统自动云备份和设备迁移备份关闭。课表导出是用户主动操作，导出的文件应作为个人文件保管。插件更新、版本检查和主动使用的第三方服务有各自的网络连接，详见隐私说明。
+## 致谢与许可
 
-## 源码与构建
-
-本校认证与接口在 `app/src/main/java/cn/scvtc/campus`，原生页面和同步协调在 `app/src/main/java/com/tyust/course/scvtc`，数据校验在 `school-core`。原生课表与插件平台保留在对应基底模块。准备 JDK 21、Android SDK 37.0 与 Build Tools，设置 `JAVA_HOME`、`ANDROID_HOME` 后使用项目 Gradle Wrapper。覆盖安装要求保留 `cn.scvtc.campus.next`、原签名和递增的 `versionCode`；源码仓库不包含签名私钥。
-
-本轮相关认证恢复、账号隔离、壁纸和学分规则共 28 项检查通过；Android 13 真机保留数据升级后，已免重新输入读取真实课表、成绩和毕业学分要求。最终视觉版结果与未验证场景见 [本轮验收](docs/OPTIMIZATION_20261009.md)，历史第一版记录保留在 [VERIFICATION.md](VERIFICATION.md)。
-
-## 致谢项目
-
-[zhengfang-apk · znjhahaha](https://github.com/znjhahaha/zhengfang-apk) 提供原生基底；[SleepDown-Schedule · xiaomanjun233](https://github.com/xiaomanjun233/SleepDown-Schedule) 提供界面与动效参考。原项目及组件的许可证、版权与必要致谢保留。本项目由 zwwd1 维护，不代表学校或原项目官方。
+应用基底：[zhengfang-apk](https://github.com/znjhahaha/zhengfang-apk)；[SleepDown-Schedule](https://github.com/xiaomanjun233/SleepDown-Schedule) 提供界面与动效参考。原项目许可证、版权及第三方组件声明保留。应用中的维护、更新与反馈属于本项目，依法必要的原作者信息仅保留在致谢与许可中。本项目不代表学校或原项目官方。

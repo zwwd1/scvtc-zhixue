@@ -940,7 +940,7 @@ fun LiquidSegmentedControl(
                                     chromaticAberration = params.chromaticAberration
                                 )
                             }
-                        } else if (lensAnchor == null) {
+                        } else if (lensAnchor == null && com.tyust.course.manager.AppearanceSettingsManager.glassEffectEnabled) {
                             // 既无 AGSL 也无离屏折射（API ≤ 30）：只剩 RGB 分离近似。
                             lens(
                                 refractionHeight = 10.dp.toPx() * (0.42f + press * 0.58f),
@@ -956,6 +956,7 @@ fun LiquidSegmentedControl(
                                     .coerceIn(0f, 2.2f).dp.toPx()
                             )
                         }
+                        if (!com.tyust.course.manager.AppearanceSettingsManager.glassEffectEnabled) blur(12.dp.toPx())
                         // lensAnchor != null（API31/32）：折射与七波长色散都已由
                         // glassLens 在这之前画完。这里**不能**再叠 chromaticFringe ——
                         // 那是两套不同的边缘着色互相污染，屏幕上就是那圈蓝紫边。

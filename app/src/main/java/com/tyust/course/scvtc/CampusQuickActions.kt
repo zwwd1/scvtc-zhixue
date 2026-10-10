@@ -1,6 +1,8 @@
 package com.tyust.course.scvtc
 import androidx.compose.runtime.*
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.ui.unit.dp
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.*
@@ -10,7 +12,7 @@ import kotlinx.coroutines.launch
 @Composable fun CampusQuickActions(){
  val scope=rememberCoroutineScope();var busy by remember{mutableStateOf(false)}
  val dark=NextAppearance.theme.effectiveDark(com.tyust.course.manager.AppThemeCoordinator.systemNight)
- Row{
+ Row(horizontalArrangement=Arrangement.spacedBy(4.dp)){
   SystemIconButton(icon=Icons.Outlined.Sync,contentDescription="刷新课表",enabled=!busy,tint=MaterialTheme.colorScheme.onBackground,onClick={if(!busy){busy=true;scope.launch{try{ScvtcRuntime.synchronize()}catch(e:Exception){if(e is kotlinx.coroutines.CancellationException)throw e}finally{busy=false}}}})
   SystemIconButton(icon=if(dark)Icons.Outlined.LightMode else Icons.Outlined.DarkMode,contentDescription="切换浅色深色",tint=MaterialTheme.colorScheme.onBackground,onClick={NextAppearance.update(NextAppearance.theme.copy(mode=if(dark)ThemeMode.LIGHT else ThemeMode.DARK))})
  }

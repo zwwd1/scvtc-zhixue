@@ -1,35 +1,20 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "name": "川职·知学",
-  "builtAtDate": "2026-10-09",
-  "sourceCommit": "b43e2b46f9d020f6121890f31cba56dd843ff976",
+  "version": "1.2.0",
+  "builtAtDate": "2026-10-10",
+  "status": "source_frozen_before_final_packaging",
   "sourceRepository": "https://github.com/zwwd1/scvtc-zhixue",
-  "productionInputsUnchangedAfterBuild": true,
-  "documentationAddedAfterBuild": true,
   "artifact": {
-    "file": "scvtc-campus-next-1.0.0.apk",
-    "sha256": "38e565056d03958298c9c5c9cec4f46b9eb6be61dface31923b8b7c2027e9658",
-    "size": 20019581,
+    "file": "scvtc-zhixue-1.2.0.apk",
+    "versionName": "1.2.0",
+    "versionCode": 9,
     "packageName": "cn.scvtc.campus.next",
-    "versionName": "1.0.0",
-    "versionCode": 7,
-    "minSdk": 33,
-    "targetSdk": 36,
     "certificateSha256": "f4eb44ef0231232918e6bfe2bae00506d9bb77c49b6f516869fadaf2dcff7aed"
   },
-  "toolchain": {
-    "jdk": "21.0.12",
-    "gradle": "9.7.1",
-    "compileSdk": "37.0",
-    "buildTools": "37.0.0"
-  },
-  "checks": {
-    "releaseBuild": "passed",
-    "originalSigningCertificate": "passed",
-    "zipIntegrity": "passed",
-    "zip16KiBAlignment": "passed",
-    "userCredentialPlaintextScan": "passed"
-  },
-  "finalApkDeviceVerification": "not_completed",
+  "finalArtifactReport": "GitHub Release attached BUILD_PROVENANCE.json and main branch report",
+  "deviceVerification": "not_run_user_will_test",
+  "functionalTests": "not_run_at_user_request",
+  "cloudServicesPaused": true,
   "report": "VERIFICATION.md"
 }
