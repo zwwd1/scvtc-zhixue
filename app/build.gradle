@@ -145,6 +145,14 @@ android {
         aidl true
     }
 
+    // The GitHub APK includes every supported ABI. Compress native libraries;
+    // Android extracts only this device's libraries when installing the APK.
+    packagingOptions {
+        jniLibs {
+            useLegacyPackaging true
+        }
+    }
+
     sourceSets.test.java.srcDir 'src/sharedTest/java'
     sourceSets.androidTest.java.srcDir 'src/sharedTest/java'
 
