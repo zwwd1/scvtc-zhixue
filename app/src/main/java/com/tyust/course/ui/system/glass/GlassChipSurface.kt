@@ -207,13 +207,8 @@ fun Modifier.liquidChip(
                 drawRect((if (isLight) Color.White else Color(0xFF171B22)).copy(alpha = alpha))
             }
         )
-        .glassRim(
-            shape = shape,
-            intensity = rimStrength,
-            isLightTheme = isLight,
-            pressProgress = { optics.pressProgress },
-            pointerOffset = { if (allowOpticalFeedback) optics.pointerPosition else Offset.Unspecified }
-        )
+        // drawBackdrop already supplies the sampled specular edge. A second
+        // painted contour makes small toolbar controls look like solid rings.
         .then(if (allowInteraction) optics.gestureModifier else Modifier)
 }
 
@@ -304,16 +299,16 @@ fun Modifier.glassRim(
     pointerOffset: () -> Offset = { Offset.Unspecified }
 ): Modifier = drawWithCache {
     val outline = shape.createOutline(size, layoutDirection, this)
-    val contourWidth = 1.dp.toPx()
+    val contourWidth = 0.5.dp.toPx()
 
     // 内缘：把轮廓整体内缩一圈再描边，光就贴在玻璃内壁上
-    val insetPx = 1.1.dp.toPx()
+    val insetPx = 0.65.dp.toPx()
     val innerSize = Size(
         (size.width - insetPx * 2f).coerceAtLeast(0.1f),
         (size.height - insetPx * 2f).coerceAtLeast(0.1f)
     )
     val innerOutline = shape.createOutline(innerSize, layoutDirection, this)
-    val innerWidth = 1.2.dp.toPx()
+    val innerWidth = 0.5.dp.toPx()
 
     // 浅色主题下白色内缘线画在白色盘面上等于没画（白叠白），只留一点点；
     // 深色主题反过来，白线才是唯一能看见的光。

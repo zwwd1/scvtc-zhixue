@@ -123,7 +123,6 @@ import com.tyust.course.ui.theme.IOSBlueDark
 import com.tyust.course.ui.theme.IOSBlueLight
 import com.tyust.course.ui.theme.IOSRedDark
 import com.tyust.course.ui.theme.IOSRedLight
-import com.tyust.course.scvtc.nextGlassSurface
 import com.tyust.course.ui.theme.NeuDarkShadow
 import com.tyust.course.ui.theme.NeuDivider
 import com.tyust.course.ui.theme.NeuInsetBackground
@@ -738,16 +737,10 @@ fun SystemPrimaryButton(
     enabled: Boolean = true,
     leadingIcon: (@Composable () -> Unit)? = null
 ) {
-    if (com.tyust.course.scvtc.NextAppearance.theme.ui == cn.scvtc.campus.UiSystem.MIUIX) {
-        top.yukonga.miuix.kmp.basic.Button(onClick = onClick, modifier = modifier.nextGlassSurface(enabled=enabled), enabled = enabled, colors = top.yukonga.miuix.kmp.basic.ButtonDefaults.buttonColors(color=MaterialTheme.colorScheme.primary.copy(alpha=.14f),contentColor=MaterialTheme.colorScheme.primary)) {
-            leadingIcon?.invoke()
-            top.yukonga.miuix.kmp.basic.Text(text)
-        }
-    } else {
-        androidx.compose.material3.Button(onClick = onClick, modifier = modifier, enabled = enabled) {
-            leadingIcon?.invoke()
-            Text(text)
-        }
+    LiquidButton(onClick, modifier = modifier, enabled = enabled, style = LiquidButtonStyle.Tinted,
+        tintAlpha = 0.16f, contentColor = MaterialTheme.colorScheme.primary) {
+        leadingIcon?.invoke()
+        Text(text, style = MaterialTheme.typography.labelLarge, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
     }
 }
 
@@ -759,16 +752,10 @@ fun SystemSecondaryButton(
     enabled: Boolean = true,
     leadingIcon: (@Composable () -> Unit)? = null
 ) {
-    if (com.tyust.course.scvtc.NextAppearance.theme.ui == cn.scvtc.campus.UiSystem.MIUIX) {
-        top.yukonga.miuix.kmp.basic.Button(onClick = onClick, modifier = modifier.nextGlassSurface(enabled=enabled), enabled = enabled, colors = top.yukonga.miuix.kmp.basic.ButtonDefaults.buttonColors(color=Color.Transparent)) {
-            leadingIcon?.invoke()
-            top.yukonga.miuix.kmp.basic.Text(text)
-        }
-    } else {
-        androidx.compose.material3.FilledTonalButton(onClick = onClick, modifier = modifier, enabled = enabled) {
-            leadingIcon?.invoke()
-            Text(text)
-        }
+    LiquidButton(onClick, modifier = modifier, enabled = enabled, style = LiquidButtonStyle.Transparent,
+        contentColor = MaterialTheme.colorScheme.onSurface) {
+        leadingIcon?.invoke()
+        Text(text, style = MaterialTheme.typography.labelLarge, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
     }
 }
 
@@ -780,16 +767,10 @@ fun SystemDestructiveButton(
     enabled: Boolean = true,
     leadingIcon: (@Composable () -> Unit)? = null
 ) {
-    if (com.tyust.course.scvtc.NextAppearance.theme.ui == cn.scvtc.campus.UiSystem.MIUIX) {
-        top.yukonga.miuix.kmp.basic.Button(onClick = onClick, modifier = modifier.nextGlassSurface(enabled=enabled), enabled = enabled, colors = top.yukonga.miuix.kmp.basic.ButtonDefaults.buttonColors(color=Color.Transparent)) {
-            leadingIcon?.invoke()
-            top.yukonga.miuix.kmp.basic.Text(text)
-        }
-    } else {
-        androidx.compose.material3.Button(onClick = onClick, modifier = modifier, enabled = enabled) {
-            leadingIcon?.invoke()
-            Text(text)
-        }
+    LiquidButton(onClick, modifier = modifier, enabled = enabled, style = LiquidButtonStyle.Tinted,
+        tint = MaterialTheme.colorScheme.error, tintAlpha = 0.16f, contentColor = MaterialTheme.colorScheme.error) {
+        leadingIcon?.invoke()
+        Text(text, style = MaterialTheme.typography.labelLarge, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
     }
 }
 
@@ -873,12 +854,6 @@ fun SystemIconButton(
     chip: Boolean = true,
     backdrop: Backdrop? = LocalControlBackdrop.current
 ) {
-    if (com.tyust.course.scvtc.NextAppearance.theme.ui == cn.scvtc.campus.UiSystem.MIUIX) {
-        top.yukonga.miuix.kmp.basic.IconButton(onClick = onClick, enabled = enabled, modifier=Modifier.nextGlassSurface(enabled=enabled)) {
-            top.yukonga.miuix.kmp.basic.Icon(icon, contentDescription, tint = tint)
-        }
-        return
-    }
     androidx.compose.material3.TooltipBox(
         positionProvider = androidx.compose.material3.TooltipDefaults.rememberPlainTooltipPositionProvider(),
         tooltip = {

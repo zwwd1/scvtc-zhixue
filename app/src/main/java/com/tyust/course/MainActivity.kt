@@ -70,6 +70,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.launch
 import com.tyust.course.ui.system.PageDataViewModel
 import com.tyust.course.ui.system.LocalPageDataState
 import com.tyust.course.ui.system.NavScrollIntent
@@ -89,6 +91,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.asComposeRenderEffect
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
@@ -184,10 +187,13 @@ class MainActivity : FragmentActivity() {
 
         val prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         val hasSeenOnboarding = prefs.getBoolean(KEY_HAS_SEEN_ONBOARDING, false)
+        val installation = packageManager.getPackageInfo(packageName, 0)
+        val firstInstall = installation.firstInstallTime == installation.lastUpdateTime
+        val needsConnectionGuide = firstInstall && !prefs.getBoolean("scvtc-login-offered", false) && !BuildConfig.UI_PREVIEW
 
         setContent {
             com.tyust.course.scvtc.NextTheme {
-                var showOnboarding by remember { mutableStateOf(!hasSeenOnboarding && !userManager.isDemoMode) }
+                var showOnboarding by remember { mutableStateOf(firstInstall && !hasSeenOnboarding && !needsConnectionGuide && !userManager.isDemoMode) }
                 // 开源版授权检查不会拒绝设备，先呈现真实内容，再完成兼容检查。
                 var activationState by remember { mutableIntStateOf(2) }
 
@@ -218,6 +224,19 @@ class MainActivity : FragmentActivity() {
                 }
                 com.tyust.course.ui.screen.UsageNotice()
             }
+        }
+        if (savedInstanceState == null && needsConnectionGuide && !userManager.isDemoMode) lifecycleScope.launch {
+            val hasAccount = userManager.savedAccounts.isNotEmpty() || userManager.studentId.orEmpty().isNotBlank() ||
+                com.tyust.course.scvtc.ScvtcRuntime.account.isNotBlank()
+            val hasRecords = try { com.tyust.course.scvtc.ScvtcRuntime.hasLocalRecords() }
+            catch(e:kotlinx.coroutines.CancellationException){throw e}
+            catch(_:Exception) {
+                android.widget.Toast.makeText(this@MainActivity,"本机记录尚未读取完成，请稍后再连接教务",android.widget.Toast.LENGTH_LONG).show()
+                return@launch
+            }
+            prefs.edit().putBoolean("scvtc-login-offered", true).putBoolean(KEY_HAS_SEEN_ONBOARDING, true).apply()
+            if (!hasAccount && !hasRecords) startActivity(Intent(this@MainActivity, LoginActivity::class.java)
+                .putExtra(LoginActivity.EXTRA_RETURN_TO_CALLER, true))
         }
     }
     override fun onNewIntent(intent: Intent) {
@@ -621,6 +640,10 @@ fun MainScreen(fragmentActivity: FragmentActivity) {
                             com.tyust.course.ui.theme.NavigationPages(navigationMotion,
                                 modifier = Modifier.fillMaxSize().graphicsLayer {
                                     translationX = -6.dp.toPx() * dialogHostState.pageProgress
+                                    val p = dialogHostState.pageProgress
+                                    val radius = 10.dp.toPx() * 4f * p * (1f-p)
+                                    renderEffect = if(android.os.Build.VERSION.SDK_INT>=31 && radius>0.1f)
+                                        android.graphics.RenderEffect.createBlurEffect(radius,radius,android.graphics.Shader.TileMode.CLAMP).asComposeRenderEffect() else null
                                     val entry = com.tyust.course.ui.theme.StartupLogoAnimation.contentProgress
                                     translationY = (1f - entry) * 16.dp.toPx()
                                     alpha = (1f - 0.03f * dialogHostState.pageProgress) * entry

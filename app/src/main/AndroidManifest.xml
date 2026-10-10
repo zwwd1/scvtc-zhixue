@@ -26,6 +26,7 @@
     <application
         android:name=".CourseApplication"
         android:allowBackup="false"
+        android:enableOnBackInvokedCallback="true"
         android:usesCleartextTraffic="true"
         android:dataExtractionRules="@xml/data_extraction_rules"
         android:fullBackupContent="@xml/backup_rules"
@@ -72,7 +73,8 @@
             android:name=".LoginActivity"
             android:theme="@style/Theme.CourseSelector.Starting"
             android:configChanges="uiMode"
-            android:exported="false" />
+            android:exported="false"
+            android:windowSoftInputMode="adjustResize" />
         <activity
             android:name=".CookieWebViewActivity"
             android:configChanges="uiMode"

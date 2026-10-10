@@ -166,6 +166,7 @@ fun LiquidButton(
     contentColor: Color = Color.Unspecified,
     minHeight: Dp = 48.dp,
     horizontalPadding: Dp = 16.dp,
+    tintAlpha: Float = GlassRecipe.ActionTintAlpha,
     content: @Composable RowScope.() -> Unit
 ) {
     val isSolid = style == LiquidButtonStyle.SolidSurface || style == LiquidButtonStyle.SolidTinted
@@ -332,7 +333,7 @@ fun LiquidButton(
                         // 不用 BlendMode.Hue：那样只贡献色相，明度会沿用身后折射的环境亮度，
                         // 在壁纸上形成一条随位置游走的伪高光。这里直接实色覆盖。
                         style == LiquidButtonStyle.Tinted ->
-                            drawRect(activeTint.copy(alpha = GlassRecipe.ActionTintAlpha))
+                            drawRect(activeTint.copy(alpha = tintAlpha))
                         style == LiquidButtonStyle.Surface -> drawRect(wallpaperColors.surface)
                         else -> Unit
                     }
@@ -346,7 +347,7 @@ fun LiquidButton(
             !enabled -> if (isLightTheme) IOSDisabledFillLight else IOSDisabledFillDark
             style == LiquidButtonStyle.SolidTinted -> activeTint
             style == LiquidButtonStyle.SolidSurface -> MaterialTheme.colorScheme.surfaceContainerHigh
-            style == LiquidButtonStyle.Tinted -> activeTint.copy(alpha = GlassRecipe.ActionTintAlpha)
+            style == LiquidButtonStyle.Tinted -> activeTint.copy(alpha = tintAlpha)
             style == LiquidButtonStyle.Surface -> wallpaperColors.solidSurface.copy(alpha = 0.94f)
             else -> Color.Transparent
         }

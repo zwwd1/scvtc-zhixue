@@ -204,6 +204,10 @@ fun ScheduleSettingsScreen(
                         ),
                     verticalArrangement = Arrangement.spacedBy(SectionSpacing)
                 ) {
+                    if(reminderTerm.isNotBlank()) InsetGroupedSection {
+                        InsetGroupedRow(title="当前课表",subtitle=listOf(reminderAccountLabel,reminderTerm)
+                            .filter(String::isNotBlank).joinToString(" · "),showDivider=false)
+                    }
                     reminderSummary?.let { summary ->
                         SemesterReminderSection(reminderAccountLabel, reminderTerm, summary, canChangeReminders,
                             onSemesterReminders, onConfigureTime = { showDatePicker = true })
@@ -215,11 +219,30 @@ fun ScheduleSettingsScreen(
                                     if (displayPreferences.showWeekend) 0 else 1,
                                     { onDisplayPreferences(displayPreferences.copy(showWeekend = it == 0)) }, Modifier.width(104.dp))
                             })
-                            InsetGroupedRow(title = "显示密度", subtitle = "名称和地点仍可完整查看", showDivider = false, trailing = {
+                            InsetGroupedRow(title = "显示密度", subtitle = "名称和地点仍可完整查看", trailing = {
                                 com.tyust.course.ui.system.SystemPicker(listOf("标准", "紧凑"),
                                     if (displayPreferences.compact) 1 else 0,
                                     { onDisplayPreferences(displayPreferences.copy(compact = it == 1)) }, Modifier.width(104.dp))
                             })
+                            InsetGroupedRow(title="课程字号",subtitle="同时保留系统字体缩放",trailing={
+                                val values=listOf(0.85f,1f,1.15f,1.3f)
+                                com.tyust.course.ui.system.SystemPicker(listOf("85%","100%","115%","130%"),
+                                    values.indexOf(displayPreferences.textScale).coerceAtLeast(0),
+                                    {onDisplayPreferences(displayPreferences.copy(textScale=values[it]))},Modifier.width(104.dp))
+                            })
+                            InsetGroupedRow(title="节次高度",subtitle="长课名仍按内容自动扩展",trailing={
+                                val values=listOf(1f,1.2f,1.4f,1.6f)
+                                com.tyust.course.ui.system.SystemPicker(listOf("标准","加高","宽松","更宽松"),
+                                    values.indexOf(displayPreferences.rowHeightScale).coerceAtLeast(0),
+                                    {onDisplayPreferences(displayPreferences.copy(rowHeightScale=values[it]))},Modifier.width(104.dp))
+                            })
+                            InsetGroupedRow(title="节次时间",subtitle="仅控制周视图时间列，提醒不受影响",trailing={
+                                com.tyust.course.ui.system.SystemPicker(listOf("显示","隐藏"),
+                                    if(displayPreferences.showPeriodTimes)0 else 1,
+                                    {onDisplayPreferences(displayPreferences.copy(showPeriodTimes=it==0))},Modifier.width(104.dp))
+                            })
+                            InsetGroupedRow(title="恢复显示默认值",subtitle="保留开学日期、作息与课前提醒",showDivider=false,
+                                onClick={onDisplayPreferences(com.tyust.course.schedule.ScheduleDisplayPreferences(dayView=displayPreferences.dayView))})
                         }
                     }
                     InsetGroupedSection(header = "桌面组件") {
@@ -303,15 +326,17 @@ fun ScheduleSettingsScreen(
                                 InsetGroupedRow(
                                     title = "第 ${periodTime.period} 节",
                                     trailing = {
-                                        GlassFilterChip(
-                                            label = if (hasTime) {
-                                                "${periodTime.startTime} - ${periodTime.endTime}"
-                                            } else {
-                                                "未设置"
-                                            },
-                                            selected = hasTime,
-                                            compact = true
-                                        )
+                                        com.tyust.course.ui.system.LiquidButton(
+                                            onClick = { editingPeriod = periodTime },
+                                            style = if (hasTime) com.tyust.course.ui.system.LiquidButtonStyle.Transparent
+                                                else com.tyust.course.ui.system.LiquidButtonStyle.Tinted,
+                                            tint = MaterialTheme.colorScheme.error, tintAlpha = 0.16f,
+                                            contentColor = if (hasTime) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.error,
+                                            minHeight = 44.dp, horizontalPadding = 14.dp
+                                        ) {
+                                            Text(if (hasTime) "${periodTime.startTime} – ${periodTime.endTime}" else "未设置",
+                                                style = MaterialTheme.typography.labelLarge)
+                                        }
                                     },
                                     showDivider = index != periodTimes.lastIndex,
                                     onClick = { editingPeriod = periodTime }

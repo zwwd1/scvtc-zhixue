@@ -257,12 +257,17 @@ private fun SchedulePages(
                 isCurrent = !nextSemester && week == actualWeek && it.id in current,
                 isNext = !nextSemester && week == actualWeek && it.id == next) }
         }
+        val systemDensity = androidx.compose.ui.platform.LocalDensity.current
+        androidx.compose.runtime.CompositionLocalProvider(androidx.compose.ui.platform.LocalDensity provides
+            androidx.compose.ui.unit.Density(systemDensity.density, systemDensity.fontScale * preferences.textScale)) {
         if (dayView) ScheduleDayList(displayed, week, day, firstWeekDate, times,
             preferences.compact, scroll, topInset, onCourse, onCourseLongClick = onLongClick,
             agenda = agenda, now = now, isToday = !nextSemester && week == actualWeek && day == ScheduleDates.dayAt(now), onCalendar = onCalendar)
-        else ScheduleGrid(displayed, week, times, periodCount, onCourse, scrollState = scroll,
+        else ScheduleGrid(displayed, week, if(preferences.showPeriodTimes)times else emptyList(), periodCount, onCourse, scrollState = scroll,
             topInset = topInset, showWeekend = preferences.showWeekend, compact = preferences.compact,
+            rowHeightScale = preferences.rowHeightScale,
             onCourseLongClick = onLongClick)
+        }
     }
 }
 

@@ -7,7 +7,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import com.tyust.course.scvtc.nextGlassSurface
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 
@@ -22,12 +21,12 @@ fun SystemDialogButton(
     content: @Composable RowScope.() -> Unit
 ) {
 
-    if (com.tyust.course.scvtc.NextAppearance.theme.ui == cn.scvtc.campus.UiSystem.MIUIX) {
-        top.yukonga.miuix.kmp.basic.Button(onClick = onClick, modifier = modifier.nextGlassSurface(enabled=enabled), enabled = enabled,
-            colors = top.yukonga.miuix.kmp.basic.ButtonDefaults.buttonColors(color=if(primary)MaterialTheme.colorScheme.primary.copy(alpha=.14f)else Color.Transparent)) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp), content = content)
-        }
-    } else {
-        androidx.compose.material3.Button(onClick = onClick, modifier = modifier.nextGlassSurface(enabled=enabled), enabled = enabled, content = content)
+    val color = when {
+        destructive -> MaterialTheme.colorScheme.error
+        primary -> MaterialTheme.colorScheme.primary
+        else -> MaterialTheme.colorScheme.onSurface
     }
+    LiquidButton(onClick, modifier = modifier, enabled = enabled,
+        style = if (primary || destructive) LiquidButtonStyle.Tinted else LiquidButtonStyle.Transparent,
+        tint = color, tintAlpha = 0.16f, contentColor = color, content = content)
 }

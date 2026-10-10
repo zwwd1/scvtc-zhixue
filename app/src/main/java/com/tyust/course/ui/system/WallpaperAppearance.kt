@@ -118,14 +118,15 @@ fun rememberWallpaperRegionAppearance(
         )
     }
 
-    if (darkTheme && AppearanceSettingsManager.mode == com.tyust.course.manager.WallpaperMode.Preset) return WallpaperAppearanceColors(
+    val preset = AppearanceSettingsManager.mode == com.tyust.course.manager.WallpaperMode.Preset
+    val target = if (darkTheme && preset) WallpaperAppearanceColors(
         surface = Color(0xFF171B22).copy(alpha = if (resolved.usesDarkForeground) 0.88f else 0.78f),
         solidSurface = Color(0xFF171B22),
         onSurface = Color(0xFFF6F7FB),
         onSurfaceVariant = Color(0xFFB3BDCC),
         border = Color(0xFFB3BDCC).copy(alpha = 0.20f),
         usesDarkForeground = false
-    )
+    ) else {
     val surfaceTarget = Color(resolved.surfaceArgb).copy(alpha = resolved.surfaceAlpha)
     val foregroundTarget = Color(resolved.foregroundArgb)
     // The tone map's contrast guarantee is for the resolved opaque foreground.
@@ -134,21 +135,24 @@ fun rememberWallpaperRegionAppearance(
         foregroundTarget.copy(alpha = 0.68f) else foregroundTarget
     val borderTarget = Color(resolved.borderArgb).copy(alpha = if (resolved.isMixed) 0.24f else 0.16f)
     val solidTarget = if (resolved.usesDarkForeground) Color(0xFFE9E9EE) else Color(0xFF2C2C2E)
+    WallpaperAppearanceColors(surfaceTarget,solidTarget,foregroundTarget,variantTarget,borderTarget,resolved.usesDarkForeground)
+    }
     // Do not interpolate dark text through grey on a newly light/dark image.
     // A polarity change must use the matching foreground and backing together.
-    val animation = tween<Color>(durationMillis = 0)
-    val surface by animateColorAsState(surfaceTarget, animation, label = "wallpaperSurface")
-    val solidSurface by animateColorAsState(solidTarget, animation, label = "wallpaperSolidSurface")
-    val foreground by animateColorAsState(foregroundTarget, animation, label = "wallpaperForeground")
-    val variant by animateColorAsState(variantTarget, animation, label = "wallpaperForegroundVariant")
-    val border by animateColorAsState(borderTarget, animation, label = "wallpaperBorder")
+    val animation = tween<Color>(durationMillis = if(preset && android.animation.ValueAnimator.areAnimatorsEnabled())320 else 0,
+        easing=androidx.compose.animation.core.FastOutSlowInEasing)
+    val surface by animateColorAsState(target.surface, animation, label = "wallpaperSurface")
+    val solidSurface by animateColorAsState(target.solidSurface, animation, label = "wallpaperSolidSurface")
+    val foreground by animateColorAsState(target.onSurface, animation, label = "wallpaperForeground")
+    val variant by animateColorAsState(target.onSurfaceVariant, animation, label = "wallpaperForegroundVariant")
+    val border by animateColorAsState(target.border, animation, label = "wallpaperBorder")
     return WallpaperAppearanceColors(
         surface = surface,
         solidSurface = solidSurface,
         onSurface = foreground,
         onSurfaceVariant = variant,
         border = border,
-        usesDarkForeground = resolved.usesDarkForeground
+        usesDarkForeground = target.usesDarkForeground
     )
 }
 

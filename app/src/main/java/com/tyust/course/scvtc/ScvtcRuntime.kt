@@ -30,6 +30,7 @@ import java.util.concurrent.TimeUnit
 @Entity(tableName="school_schedules", primaryKeys=["account","semester"])
 data class ScvtcSnapshot(val account:String,val semester:String,val payload:String,val fetchedAt:Long,val recipe:String="")
 @Dao interface ScvtcDao {
+ @Query("SELECT EXISTS(SELECT 1 FROM school_schedules) OR EXISTS(SELECT 1 FROM school_services)") suspend fun hasLocalRecords():Boolean
  @Query("SELECT * FROM school_schedules WHERE account=:account AND semester=:semester") suspend fun read(account:String,semester:String):ScvtcSnapshot?
  @Insert(onConflict=OnConflictStrategy.REPLACE) suspend fun put(row:ScvtcSnapshot)
  @Query("UPDATE school_schedules SET recipe='' WHERE account=:account") suspend fun clearRecipes(account:String)
@@ -103,9 +104,16 @@ object ScvtcRuntime {
    } catch(e:CancellationException) {
     loginState.value=cn.scvtc.campus.NativeLoginState(a,message="已停止本次登录，原数据保留");throw e
    } catch(e:Exception) {
-    val extra=e is cn.scvtc.campus.JwxtAuthenticationRequired
+    val stage=(e as? cn.scvtc.campus.JwxtAuthenticationRequired)?.stage
+    val extra=stage in setOf(cn.scvtc.campus.AuthenticationStage.CHALLENGE,cn.scvtc.campus.AuthenticationStage.SESSION)
     loginState.value=cn.scvtc.campus.NativeLoginState(a,requiresVerification=extra,
-     message=if(extra)"学校暂时需要补充认证，已填信息会保留" else "这次登录未完成，请检查网络或稍后重试；原数据保留")
+     message=when(stage) {
+      cn.scvtc.campus.AuthenticationStage.CHALLENGE->"学校显示了验证码或二次认证，请在学校认证页完成；已填信息保留"
+      cn.scvtc.campus.AuthenticationStage.FORM->"学校登录表单未准备好，请重试；也可打开学校认证页继续"
+      cn.scvtc.campus.AuthenticationStage.CALLBACK->"学校认证回调等待超时，请重试；原数据保留"
+      cn.scvtc.campus.AuthenticationStage.SESSION->"学校会话尚未建立，可补充认证；原数据保留"
+      null->"这次登录未完成，请检查网络或稍后重试；原数据保留"
+     })
     throw e
    }
   }
@@ -154,6 +162,7 @@ object ScvtcRuntime {
  fun initialize(c:Context){context=c.applicationContext;progress=NativeSyncProgress(context);progress.restore(account,semester);db=Room.databaseBuilder(context,ScvtcDatabase::class.java,"scvtc-native.db").addMigrations(object:androidx.room.migration.Migration(1,2){override fun migrate(db:androidx.sqlite.db.SupportSQLiteDatabase){db.execSQL("CREATE TABLE IF NOT EXISTS school_services (account TEXT NOT NULL, semester TEXT NOT NULL, module TEXT NOT NULL, payload TEXT NOT NULL, fetchedAt INTEGER NOT NULL, PRIMARY KEY(account,semester,module))")}}).build()}
  private val prefs get()=context.getSharedPreferences("scvtc_profile",Context.MODE_PRIVATE)
  val account get()=prefs.getString("account","").orEmpty()
+ suspend fun hasLocalRecords():Boolean=db.schedules().hasLocalRecords()
  val semester get()=prefs.getString("semester","").orEmpty()
  fun confirm(account:String,term:String){require(account.matches(Regex("[0-9]{6,20}"))){"请确认当前官方账号的学号"};require(term.matches(Regex("20[0-9]{2}-20[0-9]{2}-[12]"))){"请确认学校页面中的学期"};prefs.edit().putString("account",account).putString("semester",term).putString("term:$account",term).apply()}
  /** Persist native login eligibility before course reading, so closing the page

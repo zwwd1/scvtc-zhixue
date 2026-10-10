@@ -114,7 +114,7 @@ fun CourseSelectorTheme(
         else -> LightColorScheme
     }
 
-    val colorScheme = baseColorScheme
+    val colorScheme = animatedThemePalette(baseColorScheme)
 
     val view = LocalView.current
     val rootWallpaperColors = rememberWallpaperRegionAppearance(darkTheme = resolvedDarkTheme)

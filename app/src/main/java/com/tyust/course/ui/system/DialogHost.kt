@@ -44,6 +44,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.asComposeRenderEffect
+import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
+import androidx.compose.ui.input.nestedscroll.NestedScrollSource
+import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.unit.Velocity
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInRoot
@@ -142,6 +147,38 @@ fun DialogHost(state: DialogHostState, modifier: Modifier = Modifier) {
             val scope = rememberCoroutineScope()
             var hostSize by remember { mutableStateOf(IntSize.Zero) }
             var hostOrigin by remember { mutableStateOf(Offset.Zero) }
+            var pageDrag by remember { mutableFloatStateOf(0f) }
+            var restoreDrag by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
+            val pageScroll = remember(dialog, density, reducedMotion) {
+                object : NestedScrollConnection {
+                    override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
+                        if (!page || reducedMotion || source != NestedScrollSource.UserInput || pageDrag <= 0f || available.y >= 0f) return Offset.Zero
+                        restoreDrag?.cancel()
+                        val consumed = maxOf(available.y, -pageDrag)
+                        pageDrag += consumed
+                        return Offset(0f, consumed)
+                    }
+                    override fun onPostScroll(consumed: Offset, available: Offset, source: NestedScrollSource): Offset {
+                        if (!page || reducedMotion || state.dialogs.lastOrNull() !== dialog ||
+                            !visibility.currentState || !visibility.targetState || source != NestedScrollSource.UserInput || available.y <= 0f) return Offset.Zero
+                        restoreDrag?.cancel()
+                        pageDrag = (pageDrag + available.y * 0.72f).coerceAtMost(hostSize.height * 0.42f)
+                        return Offset(0f, available.y)
+                    }
+                    override suspend fun onPreFling(available: Velocity): Velocity {
+                        if (pageDrag <= 0f) return Velocity.Zero
+                        restoreDrag?.cancel()
+                        if (pageDrag >= with(density) { 96.dp.toPx() } ||
+                            (pageDrag >= with(density) { 32.dp.toPx() } && available.y >= with(density) { 1000.dp.toPx() })) {
+                            state.dismiss(dialog.handle)
+                        } else restoreDrag = scope.launch {
+                            androidx.compose.animation.core.animate(pageDrag, 0f,
+                                animationSpec = com.tyust.course.ui.theme.MotionSpring.snappy()) { value, _ -> pageDrag = value }
+                        }
+                        return Velocity(0f, available.y)
+                    }
+                }
+            }
             PredictiveBackHandler(enabled = state.dialogs.lastOrNull() === dialog && visibility.targetState) { events ->
                 try {
                     events.collect {
@@ -177,7 +214,8 @@ fun DialogHost(state: DialogHostState, modifier: Modifier = Modifier) {
                     }
                 }, label = "dialog-modules") { if (it == EnterExitState.Visible) 1f else 0f }
                 LaunchedEffect(dialog) {
-                    snapshotFlow { progress.value.coerceIn(0f, 1f) * (1f - backProgress.value) }
+                    snapshotFlow { progress.value.coerceIn(0f, 1f) * (1f - maxOf(backProgress.value,
+                        if(page && hostSize.height>0)(pageDrag / (hostSize.height * 0.70f)).coerceIn(0f,0.6f) else 0f)) }
                         .collect { dialog.presence = it }
                 }
                 Box(
@@ -200,9 +238,17 @@ fun DialogHost(state: DialogHostState, modifier: Modifier = Modifier) {
                                     val drag = dialog.bottomSheet?.offset ?: 0f
                                     if (dialog.bottomSheet != null) drag + (size.height - drag) * (1f - presence.coerceIn(0f, 1f))
                                     else size.height * ((1f - presence) / 3f + 0.18f * back)
-                                } else 0f
-                                scaleX = if (!page && !bottom) 0.94f + 0.06f * presence else 1f
+                                } else if(page) pageDrag else 0f
+                                val peel = if(page)maxOf(back,if(size.height>0f)pageDrag/size.height else 0f) else 0f
+                                scaleX = if (page) 1f - 0.045f * peel else if (!bottom) 0.94f + 0.06f * presence else 1f
                                 scaleY = scaleX
+                                if(page) {
+                                    clip = peel > 0f
+                                    shape = androidx.compose.foundation.shape.RoundedCornerShape(28.dp)
+                                    val radius = with(density){10.dp.toPx()} * 4f * above * (1f-above)
+                                    renderEffect = if(android.os.Build.VERSION.SDK_INT>=31 && radius>0.1f)
+                                        android.graphics.RenderEffect.createBlurEffect(radius,radius,android.graphics.Shader.TileMode.CLAMP).asComposeRenderEffect() else null
+                                }
                                 if (bottom && dialog.bottomSheet != null && !reducedMotion) {
                                     val sheet = dialog.bottomSheet
                                     val p = presence.coerceIn(0f, 1f)
@@ -228,7 +274,7 @@ fun DialogHost(state: DialogHostState, modifier: Modifier = Modifier) {
                                 }
                                 alpha = presence.coerceIn(0f, 1f) * (1f - 0.12f * back) * (1f - 0.03f * above)
                             }
-                            .then(if (page) Modifier.fillMaxSize() else Modifier.windowInsetsPadding(WindowInsets.systemBars.union(WindowInsets.ime)).padding(vertical = 12.dp))
+                            .then(if (page) Modifier.fillMaxSize().nestedScroll(pageScroll) else Modifier.windowInsetsPadding(WindowInsets.systemBars.union(WindowInsets.ime)).padding(vertical = 12.dp))
                             .semantics {
                                 paneTitle = if (dialog.bottomSheet != null) "课程详情" else "对话框"
                                 isTraversalGroup = true

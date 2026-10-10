@@ -9,7 +9,8 @@ import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.RequestBody.Companion.toRequestBody
 import java.util.concurrent.TimeUnit
 
-class JwxtAuthenticationRequired : IllegalStateException("AUTH_REQUIRED：教务 Session 需要恢复；离线内容保留")
+enum class AuthenticationStage { SESSION, FORM, CHALLENGE, CALLBACK }
+class JwxtAuthenticationRequired(val stage:AuthenticationStage=AuthenticationStage.SESSION) : IllegalStateException("AUTH_REQUIRED：教务 Session 需要恢复；离线内容保留")
 
 /** The WebView cookie store is shared by CAS navigation and native HTTP. Each
  * request asks the store for its own URL; a CAS cookie is never copied to JWGR. */

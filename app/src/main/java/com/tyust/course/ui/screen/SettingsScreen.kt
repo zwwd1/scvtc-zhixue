@@ -199,6 +199,7 @@ fun SettingsScreen(
 
             com.tyust.course.scvtc.NextGroup {
                     com.tyust.course.scvtc.NextRow("教务同步与本机备份", "离线课表保护、官方认证、日期匹配") {com.tyust.course.scvtc.CampusNavigation.request.value="profile"}
+                    com.tyust.course.scvtc.NextRow("当前课表详情设置", "开学日期、节次时间、显示与提醒") {com.tyust.course.scvtc.CampusNavigation.request.value="schedule-settings"}
                     com.tyust.course.scvtc.NextRow("CSV / ICS / HTML", "导入预览与导出") {com.tyust.course.scvtc.CampusNavigation.request.value="files"}
                 }
             InsetGroupedSection(Modifier.moduleEntrance(3), header = "外观") {

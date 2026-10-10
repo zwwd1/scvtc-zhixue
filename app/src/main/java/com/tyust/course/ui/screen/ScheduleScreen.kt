@@ -228,6 +228,7 @@ fun ScheduleGrid(
     topInset: Dp = 0.dp,
     showWeekend: Boolean = true,
     compact: Boolean = false,
+    rowHeightScale: Float = 1f,
     beforeGrid: @Composable () -> Unit = {},
     onCourseLongClick: (ScheduleCourseUi) -> Unit = {}
 ) {
@@ -247,7 +248,7 @@ fun ScheduleGrid(
     // Measure the whole timetable, not just this week's cards. Paging and live
     // status changes keep one geometry while names and teachers remain complete.
     val periodHeight = rememberFullCoursePeriodHeight(courses, columnWidth,
-        maxOf(schedulePeriodHeight() * if (compact) 0.85f else 1f,
+        maxOf(schedulePeriodHeight() * (if (compact) 0.85f else 1f) * rowHeightScale,
             (if (compact) 70.dp else 76.dp) * density.fontScale.coerceAtLeast(1f)))
     val anchor = remember(scrollState) { GridScrollAnchor() }
     val periodPixels = with(density) { periodHeight.toPx() }

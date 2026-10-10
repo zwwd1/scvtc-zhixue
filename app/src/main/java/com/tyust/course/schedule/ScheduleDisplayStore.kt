@@ -3,7 +3,10 @@ package com.tyust.course.schedule
 import android.content.SharedPreferences
 import org.json.JSONObject
 
-data class ScheduleDisplayPreferences(val dayView: Boolean = false, val showWeekend: Boolean = true, val compact: Boolean = false)
+data class ScheduleDisplayPreferences(
+    val dayView: Boolean = false, val showWeekend: Boolean = true, val compact: Boolean = false,
+    val textScale: Float = 1f, val rowHeightScale: Float = 1f, val showPeriodTimes: Boolean = true
+)
 data class ScheduleViewPosition(val week: Int, val day: Int, val weekScroll: Int, val dayScroll: Int, val calendar: String)
 
 /** Only density/weekend are lasting preferences. A saved Activity session owns date, view and scroll. */
@@ -12,7 +15,9 @@ class ScheduleDisplayStore(private val prefs: SharedPreferences, private val ses
         migrateWeekDefault(account)
         return ScheduleDisplayPreferences(
         if (session.isNotBlank() && prefs.getString("viewSession:$account", null) == session) prefs.getBoolean("day:$account", false) else false,
-        prefs.getBoolean("weekend:$account", true), prefs.getBoolean("compact:$account", false))
+        prefs.getBoolean("weekend:$account", true), prefs.getBoolean("compact:$account", false),
+        prefs.getFloat("textScale:$account",1f).coerceIn(0.85f,1.3f),
+        prefs.getFloat("rowHeightScale:$account",1f).coerceIn(1f,1.6f),prefs.getBoolean("periodTimes:$account",true))
     }
     @Synchronized private fun migrateWeekDefault(account:String) {
         if(account.isBlank())return
@@ -23,7 +28,9 @@ class ScheduleDisplayStore(private val prefs: SharedPreferences, private val ses
         if (account.isBlank()) return
         migrateWeekDefault(account)
         prefs.edit().putString("viewSession:$account", session).putBoolean("day:$account", value.dayView).putBoolean("weekend:$account", value.showWeekend)
-            .putBoolean("compact:$account", value.compact).apply()
+            .putBoolean("compact:$account", value.compact)
+            .putFloat("textScale:$account",value.textScale).putFloat("rowHeightScale:$account",value.rowHeightScale)
+            .putBoolean("periodTimes:$account",value.showPeriodTimes).apply()
     }
     fun position(account: String, term: String): ScheduleViewPosition? = runCatching {
         val data = JSONObject(prefs.getString("position:$account|$term", null) ?: return null)

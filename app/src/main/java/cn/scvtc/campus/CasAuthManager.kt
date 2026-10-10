@@ -55,7 +55,12 @@ class CasAuthManager(private val context:Context,private val api:JwxtApi) {
                 if(Uri.parse(url).host=="cas.scvtc.edu.cn"&&recoveryPages.add(url)) {
                     val completed:(Boolean)->Unit={restored->
                         if(restored)submitted=true
-                        if(!restored&&v.url==url)failure.completeExceptionally(JwxtAuthenticationRequired())
+                        if(!restored&&v.url==url) {
+                            v.evaluateJavascript("!!window.__officialLoginMemory?.challengeRequired()") { challenge ->
+                                if(v.url==url)failure.completeExceptionally(JwxtAuthenticationRequired(
+                                    if(challenge=="true")AuthenticationStage.CHALLENGE else AuthenticationStage.FORM))
+                            }
+                        }
                     }
                     if(password==null)login.recover(v,account,completed)
                     else login.configure(v,account,password,completed)
@@ -87,7 +92,7 @@ class CasAuthManager(private val context:Context,private val api:JwxtApi) {
             }
         } catch(e:TimeoutCancellationException){
             currentCoroutineContext().ensureActive()
-            throw JwxtAuthenticationRequired()
+            throw JwxtAuthenticationRequired(AuthenticationStage.CALLBACK)
         } finally {web.stopLoading();web.destroy();CookieManager.getInstance().flush()}
     }
     private suspend fun clearLoginCookies() {

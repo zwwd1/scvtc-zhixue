@@ -53,4 +53,4 @@ App 优先恢复本地 Session，失效后尝试 SSO，再必要时使用本机�
 
 Windows 使用 `gradlew.bat`，内存较小时加 `--max-workers=1`。发布配置和原签名保存在仓库外；覆盖安装要求 applicationId、原证书与 versionCode 符合升级条件。最终检查 APK SHA-256、证书、ZIP 完整性、16 KiB 对齐和源码对应关系。更新元数据签名与 APK 原签名分别验证。编译通过不等于完成真机验收。
 
-赞赏原图由仓库外 `SCVTC_DONATION_PNG` 输入；未配置的公开源码不含私人支付图。图标、角色和提示词见 [BRANDING_20261009.md](BRANDING_20261009.md)。
+赞赏原图由仓库外 `SCVTC_DONATION_PNG` 输入；未配置的公开源码不含私人支付图。图标、角色和素材来源见 [BRANDING_20261009.md](BRANDING_20261009.md)。

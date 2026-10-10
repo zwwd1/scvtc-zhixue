@@ -1,8 +1,21 @@
 (() => {
   if (window.__officialLoginMemory || window !== top || location.protocol !== 'https:') return;
-  const visible = e => e.getBoundingClientRect().width > 0 && e.getBoundingClientRect().height > 0 &&
-    !['hidden','collapse'].includes(getComputedStyle(e).visibility);
+  const visible = e => {
+    const rect = e.getBoundingClientRect();
+    if (rect.width <= 0 || rect.height <= 0) return false;
+    for (let node = e; node instanceof Element; node = node.parentElement) {
+      const style = getComputedStyle(node);
+      if (style.display === 'none' || ['hidden','collapse'].includes(style.visibility) ||
+          Number(style.opacity) === 0) return false;
+    }
+    return true;
+  };
   const challenge = e => /captcha|verifycode|verification|otp|one-time-code|验证码/i.test(e.name+' '+e.id+' '+e.autocomplete+' '+e.placeholder);
+  // iView uses .ivu-modal for notices as well as challenges. A notice is not a CAPTCHA.
+  const humanChallenge = () =>
+    [...document.querySelectorAll('iframe[src*="captcha"],img[src*="captcha"],input[autocomplete="one-time-code"],.vue-auth-box_,.auth-control_')].some(visible) ||
+    [...document.querySelectorAll('.ivu-modal')].some(e => visible(e) &&
+      /验证码|安全验证|二次认证|人机验证|拖动滑块/.test(e.textContent || ''));
   const casPage = location.origin === 'https://cas.scvtc.edu.cn' &&
     ['/cas/WEB/index.html','/cas/H5/index.html'].includes(location.pathname);
   const allowedService = () => {
@@ -30,7 +43,7 @@
     const action = new URL(form?.getAttribute('action') || location.href, location.href);
     if (action.origin !== location.origin || action.protocol !== 'https:') return null;
     const fields = [...scope.querySelectorAll('input')].filter(visible);
-    const human=fields.some(challenge)||[...document.querySelectorAll('iframe[src*="captcha"],img[src*="captcha"],input[autocomplete="one-time-code"],.vue-auth-box_,.auth-control_,.ivu-modal')].some(visible);
+    const human=fields.some(e => visible(e) && challenge(e)) || humanChallenge();
     if(human&&!allowHuman)return null;
     const users = fields.filter(e => ['text','email','tel'].includes(e.type) && e !== password && !challenge(e));
     if (users.length !== 1 || fields.some(e => e.required && ![users[0],password].includes(e) && !challenge(e))) return null;
@@ -71,6 +84,7 @@
     }
   };
   window.__officialLoginMemory = { describe:() => identify(true)?.binding || null,
+    challengeRequired:() => humanChallenge() || [...document.querySelectorAll('input')].some(e => visible(e) && challenge(e)),
     matches:binding => !!matches(identify(),binding), matchesForInput:binding=>!!matches(identify(true),binding),
     configure(binding,username,password,submit=true){
       const found=identify(true);if(!matches(found,binding))return false;

@@ -81,6 +81,7 @@ fun LoginScreen(
     loginContextRevision: Int = 0,
     onSchoolPlugins: (() -> Unit)? = null,
     onOpenWebView: () -> Unit = {},
+    onSchoolAuthentication: ((String) -> Unit)? = null,
     onSchoolAdded: () -> Unit = {},
     onDemoMode: () -> Unit = {},
     onServiceCenter: () -> Unit = {},
@@ -109,6 +110,21 @@ fun LoginScreen(
     var loginTab by rememberSaveable { mutableStateOf(if (onPasswordLogin != null) 0 else 1) }
     var username by rememberSaveable { mutableStateOf("") }
     var password by form::password
+    if (selectedSchoolId == "scvtc" && onPasswordLogin != null) {
+        LaunchedEffect(loginContextRevision) {
+            form.selectContext("scvtc:" + loginContextRevision, cookieValue)
+            if (username.isBlank()) username = com.tyust.course.scvtc.ScvtcRuntime.account
+                .ifBlank { UserManager.getInstance().studentId.orEmpty() }
+        }
+        ScvtcAccountLogin(
+            account = username, password = password, busy = isLoading, error = errorMessage,
+            onAccount = { username = it.trim() }, onPassword = { password = it },
+            onSubmit = { onPasswordLogin(username, password) },
+            onAuthentication = { onSchoolAuthentication?.invoke(username) ?: onOpenWebView() },
+            onBack = onBack
+        )
+        return
+    }
     var showCaptchaDialog by remember { mutableStateOf(false) }
     var captchaInput by remember { mutableStateOf("") }
     var captchaSubmitting by remember { mutableStateOf(false) }
@@ -657,6 +673,73 @@ fun LoginScreen(
         }
     }
     } // 关闭 CompositionLocalProvider
+}
+
+/** A school connection is a form, not a school/plugin selection wizard. */
+@Composable
+private fun ScvtcAccountLogin(
+    account: String, password: String, busy: Boolean, error: String?,
+    onAccount: (String) -> Unit, onPassword: (String) -> Unit,
+    onSubmit: () -> Unit, onAuthentication: () -> Unit, onBack: (() -> Unit)?
+) {
+    var localError by remember { mutableStateOf<String?>(null) }
+    val focus = androidx.compose.ui.platform.LocalFocusManager.current
+    val state by com.tyust.course.scvtc.ScvtcRuntime.loginState.collectAsState()
+    val submit: () -> Unit = {
+        if (!busy) {
+            if (!account.matches(Regex("[0-9]{6,20}")) || password.length !in 1..512) {
+                localError = "请输入学号和学校密码"
+            } else {
+                localError = null
+                focus.clearFocus()
+                onSubmit()
+            }
+        }
+    }
+    com.tyust.course.ui.system.GlassPageScaffold(
+        title = "连接川职教务", subtitle = "四川职业技术学院", onBack = onBack
+    ) { insets ->
+        Box(Modifier.fillMaxSize().padding(insets).imePadding(), contentAlignment = Alignment.TopCenter) {
+            Column(Modifier.widthIn(max = 560.dp).fillMaxWidth().fillMaxHeight()
+                .verticalScroll(rememberScrollState()).padding(horizontal = 20.dp, vertical = 20.dp),
+                verticalArrangement = Arrangement.spacedBy(20.dp)) {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("输入一次，后续自动同步", style = MaterialTheme.typography.titleLarge)
+                    Text("使用学校统一认证的账号。登录后先显示课表，成绩与学分在后台读取。",
+                        style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                com.tyust.course.ui.system.InsetGroupedSection {
+                    Column(Modifier.fillMaxWidth().padding(20.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
+                        com.tyust.course.ui.system.GlassFormField(account, onAccount, "学号", enabled = !busy,
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number,
+                                imeAction = androidx.compose.ui.text.input.ImeAction.Next))
+                        com.tyust.course.ui.system.GlassFormField(password, onPassword, "学校密码", enabled = !busy,
+                            password = true, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password,
+                                imeAction = androidx.compose.ui.text.input.ImeAction.Done),
+                            keyboardActions = androidx.compose.foundation.text.KeyboardActions(onDone = { submit() }))
+                        (localError ?: error)?.takeIf { it.isNotBlank() }?.let {
+                            Text(it, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.error)
+                        }
+                        SystemPrimaryButton(if (busy) "正在连接学校…" else "登录并自动同步", submit,
+                            Modifier.fillMaxWidth(), enabled = !busy)
+                        if (busy && state.account == account) {
+                            Text(state.message, style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                    }
+                }
+                Text("密码仅加密保存在这部手机。会话到期后自动恢复，不会写入导出文件或云端。",
+                    style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                SystemSecondaryButton("打开学校认证页", {
+                    if (account.matches(Regex("[0-9]{6,20}"))) { localError = null; focus.clearFocus(); onAuthentication() }
+                    else localError = "请先填写学号"
+                }, Modifier.fillMaxWidth(), enabled = !busy)
+                Text("学校出现验证码或二次认证时，可在认证页完成后继续。",
+                    style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Spacer(Modifier.height(8.dp))
+            }
+        }
+    }
 }
 
 @Composable

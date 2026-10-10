@@ -248,6 +248,11 @@ class LoginActivity : ComponentActivity() {
                     onOpenWebView = {
                         openWebView()
                     },
+                    onSchoolAuthentication = { account ->
+                        nativeLoginAccount = account
+                        manualLoginInteraction = true
+                        openWebView()
+                    },
                     onSchoolAdded = {
                         // Refresh schools list after adding
                         schools = UserManager.getInstance().supportedSchools
