@@ -114,6 +114,7 @@ fun LoginScreen(
     var captchaSubmitting by remember { mutableStateOf(false) }
     var captchaDismissed by remember { mutableStateOf(false) }
     LaunchedEffect(selectedSchoolId, loginContextRevision) {
+        if(selectedSchoolId=="scvtc") loginTab=0
         form.selectContext(selectedSchoolId.orEmpty() + ":" + loginContextRevision, cookieValue)
         captchaInput = ""
         captchaSubmitting = false
@@ -293,7 +294,7 @@ fun LoginScreen(
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.fillMaxWidth().padding(top = 8.dp)
                         )
-                        if (onSchoolPlugins != null) {
+                        if (onSchoolPlugins != null && selectedSchoolId!="scvtc") {
                             val providerLabel = remember(selectedSchool, pluginRevision) {
                                 selectedSchool?.let { school ->
                                     runCatching { com.tyust.course.academic.plugin.AcademicProviderRegistry.resolve(school)?.manifest?.name ?: "内置适配" }
@@ -345,7 +346,7 @@ fun LoginScreen(
                         Spacer(modifier = Modifier.height(20.dp))
 
                         // 登录方式切换
-                        if (onPasswordLogin != null) {
+                        if (onPasswordLogin != null && selectedSchoolId!="scvtc") {
                             SystemSegmentedControl(
                                 options = listOf("密码登录", "Cookie 登录"),
                                 selectedIndex = loginTab,
@@ -371,6 +372,7 @@ fun LoginScreen(
                                 onValueChange = { username = it },
                                 modifier = Modifier.fillMaxWidth(),
                                 placeholder = "学号",
+                                enabled = !isLoading,
                                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                                 minHeight = 50.dp
                             )
@@ -382,6 +384,7 @@ fun LoginScreen(
                                 onValueChange = { password = it },
                                 modifier = Modifier.fillMaxWidth(),
                                 placeholder = "密码",
+                                enabled = !isLoading,
                                 visualTransformation = if (showPassword) VisualTransformation.None else PasswordVisualTransformation(),
                                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
                                 trailing = {
@@ -418,7 +421,7 @@ fun LoginScreen(
                                     )
                                     Spacer(modifier = Modifier.width(8.dp))
                                     Text(
-                                        text = "提示：部分学校的教务系统已接入统一身份认证平台。如无法在此直接输入教务密码登录，建议使用“内嵌浏览器自动获取”或“Cookie 登录”方式。",
+                                        text = if(selectedSchoolId=="scvtc") "登录成功后会自动同步课表、成绩和考试。密码加密保存在本机，会话到期时自动恢复；学校要求验证码时再补充认证。" else "提示：部分学校的教务系统已接入统一身份认证平台。如无法在此直接输入教务密码登录，建议使用“内嵌浏览器自动获取”或“Cookie 登录”方式。",
                                         style = MaterialTheme.typography.bodySmall,
                                         color = SemanticInfo,
                                         lineHeight = 16.sp
@@ -465,7 +468,7 @@ fun LoginScreen(
                                 )
                                 val reportContext = androidx.compose.ui.platform.LocalContext.current
                                 TextButton(onClick = { reportContext.startActivity(android.content.Intent(reportContext, com.tyust.course.diagnostics.ErrorReportActivity::class.java)) }) { Text("查看本机错误报告") }
-                                if (onSchoolPlugins != null && !isLoading) TextButton(onClick = onSchoolPlugins) {
+                                if (onSchoolPlugins != null && !isLoading && selectedSchoolId!="scvtc") TextButton(onClick = onSchoolPlugins) {
                                     Text("检查学校插件")
                                 }
                             }
@@ -473,11 +476,10 @@ fun LoginScreen(
 
                         Spacer(modifier = Modifier.height(32.dp))
 
-                        if(selectedSchoolId=="scvtc")SystemPrimaryButton(text="川职官方统一认证",onClick=onOpenWebView,enabled=!isLoading,modifier=Modifier.fillMaxWidth().height(56.dp))
                         // Login Button
                         if (loginTab == 0 && onPasswordLogin != null) {
                             SystemPrimaryButton(
-                                text = if (isLoading) "登录中…" else "密码登录",
+                                text = if (isLoading) "正在认证…" else if(selectedSchoolId=="scvtc") "登录并自动同步" else "密码登录",
                                 onClick = { onPasswordLogin(username, password) },
                                 modifier = Modifier
                                     .fillMaxWidth()
@@ -498,7 +500,13 @@ fun LoginScreen(
                         Spacer(modifier = Modifier.height(16.dp))
 
                         // WebView Cookie Button - 密码模式下点击自动切换到 Cookie 登录
-                        if (loginTab == 0 && onPasswordLogin != null) {
+                        if(selectedSchoolId=="scvtc") {
+                            Text("密码在身份核验成功后加密保存在本机。会话过期时会自动恢复并继续同步。",
+                                style=MaterialTheme.typography.bodySmall,color=MaterialTheme.colorScheme.onSurfaceVariant)
+                            TextButton(onClick=onOpenWebView,enabled=!isLoading,modifier=Modifier.fillMaxWidth()) {
+                                Text("学校要求验证码？补充认证")
+                            }
+                        } else if (loginTab == 0 && onPasswordLogin != null) {
                             // 密码模式：不显示内嵌浏览器按钮，显示提示文字
                             TextButton(
                                 onClick = { loginTab = 1 },

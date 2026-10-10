@@ -56,6 +56,7 @@ private fun AcademicGradesContent(school: SchoolConfig, account: String, provide
     val preferences = remember(context) { GradeBrowsePreferences.from(context) }
     val tab = browse.tab
     val semester = browse.termId
+    var semesterChosen by rememberSaveable { mutableStateOf(semester.isNotBlank()) }
     val latestSemester by rememberUpdatedState(semester)
     fun chooseTerm(id: String, label: String) {
         browse = browse.copy(termId = id, termLabel = label)
@@ -64,6 +65,15 @@ private fun AcademicGradesContent(school: SchoolConfig, account: String, provide
     fun chooseTab(value: Int) {
         browse = browse.copy(tab = value)
         preferences.write(preferenceScope, browse)
+    }
+    val requestedGradeTerm by com.tyust.course.scvtc.CampusNavigation.gradeTerm.collectAsState()
+    LaunchedEffect(requestedGradeTerm) {
+        if (school.id == "scvtc" && requestedGradeTerm != null) {
+            chooseTerm(requestedGradeTerm!!, requestedGradeTerm!!)
+            chooseTab(0)
+            semesterChosen = true
+            com.tyust.course.scvtc.CampusNavigation.gradeTerm.value = null
+        }
     }
     val supportedTabs = if(school.id=="scvtc")setOf(0,1,2)else buildSet {
         if (com.tyust.course.academic.plugin.AcademicProviderRegistry.hasCapability(school, "study.grades")) { add(0); add(1) }
@@ -76,7 +86,6 @@ private fun AcademicGradesContent(school: SchoolConfig, account: String, provide
     var cacheReady by remember(session.token) { mutableStateOf(school.id != "scvtc") }
     var catalog by rememberPageData<AcademicStudyCatalog?>("$cache:terms") { null }
     var termReports by rememberPageData<Map<String, AcademicGradeReport>>("$cache:reports") { emptyMap() }
-    var semesterChosen by rememberSaveable { mutableStateOf(semester.isNotBlank()) }
     var appliedCatalogTerm by rememberSaveable { mutableStateOf<String?>(null) }
     val standardTerms = termFormat == "academic-year-semester"
     var loading by remember { mutableStateOf(true) }
@@ -101,7 +110,7 @@ private fun AcademicGradesContent(school: SchoolConfig, account: String, provide
             calendarDate?.calendar() ?: java.util.Calendar.getInstance())
     }
     fun loadError(e: Exception): String {
-        if ((e as? AcademicException)?.status == AcademicStatus.SESSION_EXPIRED)
+        if (school.id != "scvtc" && (e as? AcademicException)?.status == AcademicStatus.SESSION_EXPIRED)
             com.tyust.course.network.CourseApiClient.getInstance().notifyCookieExpired(expectedSession)
         return e.message ?: "加载失败，请重试"
     }
@@ -126,15 +135,16 @@ private fun AcademicGradesContent(school: SchoolConfig, account: String, provide
         }) else null)
 
     // The school cache is encrypted and account-scoped. Opening an academic page need not log in again.
-    LaunchedEffect(session.token) {
+    val schoolRevision by com.tyust.course.scvtc.ScvtcRuntime.revision.collectAsState()
+    LaunchedEffect(session.token, schoolRevision) {
         if (school.id != "scvtc") return@LaunchedEffect
         try {
             val saved = withContext(Dispatchers.IO) { com.tyust.course.scvtc.ScvtcNativeAdapter(account).cachedGrades() }
             if (saved != null && sessions.isCurrent(expectedSession)) {
-                if (!reportLoaded) { report = saved; reportLoaded = true }
+                report = saved; reportLoaded = true
                 val savedTerms = saved.grades.map { it.term }.filter(String::isNotBlank).distinct()
                 val copies = savedTerms.associateWith { saved.forSemester(it) }
-                termReports = copies + termReports
+                termReports = termReports + copies
                 if (catalog == null) {
                     val current = com.tyust.course.scvtc.ScvtcRuntime.semester
                     val ids = (savedTerms + current).filter(String::isNotBlank).distinct().sortedDescending()

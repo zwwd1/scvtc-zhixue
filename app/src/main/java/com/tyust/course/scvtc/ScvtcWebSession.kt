@@ -59,7 +59,7 @@ object ScvtcWebSession {
   CookieManager.getInstance().setAcceptThirdPartyCookies(view,true)
   val login=cn.scvtc.campus.OfficialLoginMemory(ScvtcRuntime.context)
   capture?.loginMemory=login
-  login.install(view){ScvtcRuntime.account}
+  login.install(view){capture?.authenticationAccount?.ifBlank { ScvtcRuntime.account } ?: ScvtcRuntime.account}
   val messages=WebViewFeature.isFeatureSupported(WebViewFeature.WEB_MESSAGE_LISTENER)
   val early=messages&&WebViewFeature.isFeatureSupported(WebViewFeature.DOCUMENT_START_SCRIPT)
   if(messages)WebViewCompat.addWebMessageListener(view,"CampusBridge",setOf(School.ORIGIN)){_,message,origin,main,_ ->
@@ -88,16 +88,13 @@ object ScvtcWebSession {
     if(u.scheme=="https"&&u.host=="www.shulin-soft.com"&&u.port==8267&&u.path=="/casLogin.html"){
      v.loadUrl(cn.scvtc.campus.CasAuthManager.JWXT_SSO_ENTRY);return
     }
-    if(login.recoveryNavigation(v,ScvtcRuntime.account,url))return
+    val authenticationAccount=capture?.authenticationAccount?.ifBlank { ScvtcRuntime.account } ?: ScvtcRuntime.account
+    if(login.recoveryNavigation(v,authenticationAccount,url))return
     if(u.host=="jwxt.scvtc.edu.cn"){
      if(messages&&!early)v.evaluateJavascript(captureScript,null)
      v.evaluateJavascript("window.__scvtc?.inspectReady()",null)
-    }else if(u.host=="cas.scvtc.edu.cn"&&ScvtcRuntime.account.isNotBlank()){
-     v.postDelayed({
-      if(v.url==url)v.evaluateJavascript("!!document.querySelector('input[type=password]')"){result->
-       if(result=="true")login.recover(v,ScvtcRuntime.account){restored->if(!restored)page.value=page.value.copy(error="请在学校官方页面完成补充认证")}
-      }
-     },2500)
+    }else if(u.host=="cas.scvtc.edu.cn"&&authenticationAccount.isNotBlank()){
+     login.recover(v,authenticationAccount){restored->if(!restored&&v.url==url)page.value=page.value.copy(error="请在学校官方页面完成补充认证")}
     }
     CookieManager.getInstance().flush()
    }
@@ -160,6 +157,8 @@ class ScvtcCapture(private val web:WebView){
  private val scope=CoroutineScope(SupervisorJob()+Dispatchers.Main.immediate)
  private val messages=Channel<String>(32)
  var visible=true
+ var authenticationAccount=""
+ val authenticationVerified=kotlinx.coroutines.flow.MutableStateFlow(false)
  var module="schedule"
  var detectedAccount="";var detectedTerm="";var detectedName=""
  private var verifiedAccount=""
@@ -169,7 +168,7 @@ class ScvtcCapture(private val web:WebView){
  private var generation=""
  private var startedGeneration=""
  private var authenticationRetries=0
- fun begin(resetAuthentication:Boolean=true){if(resetAuthentication)authenticationRetries=0;startedGeneration=""}
+ fun begin(resetAuthentication:Boolean=true){if(resetAuthentication){authenticationRetries=0;authenticationVerified.value=false};startedGeneration=""}
  init{scope.launch{for(text in messages){try{consume(JSONObject(text))}catch(e:CancellationException){throw e}catch(e:Exception){fail(e.message?:"身份确认未完成")}}}}
  fun receive(text:String){if(text.length>2600000||messages.trySend(text).isFailure)fail("学校页面消息未完成，请重新连接")}
  fun dispose(){scope.cancel();messages.close()}
@@ -187,16 +186,23 @@ class ScvtcCapture(private val web:WebView){
   ScvtcRuntime.status.value="正在恢复学校会话并继续同步；离线课表保留"
   web.loadUrl(cn.scvtc.campus.CasAuthManager.JWXT_SSO_ENTRY)
  }
- private fun startVerifiedSync(){
+ private suspend fun startVerifiedSync(){
   val calendar=officialMonday?:return
   if(verifiedAccount.isBlank()||generation.isBlank()||startedGeneration==generation)return
-  require(ScvtcRuntime.account.isBlank()||ScvtcRuntime.account==verifiedAccount){"官方账号与当前缓存账号不同，请确认学校账号"}
+  require(authenticationAccount.isBlank()||authenticationAccount==verifiedAccount){"请使用本次输入的学校账号完成认证"}
+  require(ScvtcRuntime.account.isBlank()||ScvtcRuntime.account==verifiedAccount||authenticationAccount==verifiedAccount){"官方账号与当前缓存账号不同，请确认学校账号"}
+  val memory=loginMemory?:return
+  val api=cn.scvtc.campus.JwxtApi(headers={memory.apiHeaders(verifiedAccount,it)})
+  val student=api.student(verifiedAccount)
+  require(api.calendar().first.semester==calendar.semester){"学校学期已改变，请重新连接"}
   ScvtcRuntime.confirm(verifiedAccount,calendar.semester)
-  ScvtcRuntime.registerVerifiedIdentity(verifiedAccount,calendar.semester,detectedName)
-  loginMemory?.confirmed(verifiedAccount)
+  ScvtcRuntime.registerVerifiedIdentity(verifiedAccount,calendar.semester,
+      listOf("studentName","name","xm","姓名").firstNotNullOfOrNull{student.fields[it]?.takeIf(String::isNotBlank)}.orEmpty().ifBlank{detectedName})
+  loginMemory?.confirmed(verifiedAccount,promoteEnrollment=true)
   start(resetAuthentication=false)
+  authenticationVerified.value=true
  }
- private fun consume(m:JSONObject){
+ private suspend fun consume(m:JSONObject){
   val page=m.optString("page")
   if(Uri.parse(page).scheme!="https"||Uri.parse(page).host!="jwxt.scvtc.edu.cn"||web.url!=page)return
   val kind=m.optString("kind");val epoch=m.optString("generation")

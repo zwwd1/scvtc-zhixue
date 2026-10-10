@@ -39,12 +39,17 @@ import okhttp3.Response
 import java.io.IOException
 
 class LoginActivity : ComponentActivity() {
-    private var waitingForSchoolWeb=false
-    override fun onResume(){super.onResume();if(waitingForSchoolWeb && UserManager.getInstance().isLoggedIn && com.tyust.course.scvtc.ScvtcRuntime.account.isNotBlank()){
-      waitingForSchoolWeb=false
-      if(intent.getBooleanExtra(EXTRA_RETURN_TO_CALLER,false))setResult(RESULT_OK)else startActivity(Intent(this,MainActivity::class.java))
-      finish()
-    }}
+    private var waitingForNativeLogin = false
+    private var nativeLoginAccount = ""
+    private fun completeSchoolLogin() {
+        androidx.lifecycle.ViewModelProvider(this)[com.tyust.course.ui.screen.LoginFormState::class.java].password = ""
+        if(intent.getBooleanExtra(EXTRA_RETURN_TO_CALLER,false)) setResult(RESULT_OK)
+        else startActivity(Intent(this,MainActivity::class.java))
+        finish()
+    }
+    private val schoolAuthenticationLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+        if(result.resultCode==RESULT_OK) completeSchoolLogin()
+    }
 
     override fun attachBaseContext(newBase: android.content.Context) {
         super.attachBaseContext(com.tyust.course.manager.AppThemeCoordinator.wrapContext(newBase))
@@ -161,8 +166,19 @@ class LoginActivity : ComponentActivity() {
         selectedLoginSchool = savedInstanceState?.getString("login_school")?.let { UserManager.getInstance().getSchoolById(it) }
             ?: UserManager.getInstance().currentSchool ?: UserManager.getInstance().getSchoolById("scvtc")
         manualLoginInteraction = savedInstanceState?.getBoolean("manual_login") ?: false
+        waitingForNativeLogin = savedInstanceState?.getBoolean("native_login_inflight") ?: false
+        nativeLoginAccount = savedInstanceState?.getString("native_login_account").orEmpty()
+        lifecycleScope.launch {
+            com.tyust.course.scvtc.ScvtcRuntime.loginState.collect { state ->
+                if(waitingForNativeLogin && state.account==nativeLoginAccount) {
+                    isLoading=state.busy
+                    errorMessage=if(state.busy || state.verified) null else state.message.ifBlank { null }
+                    if(state.verified) { waitingForNativeLogin=false; completeSchoolLogin() }
+                }
+            }
+        }
         loginContextRevision = savedInstanceState?.getInt("login_context_revision") ?: 0
-        if (savedInstanceState?.getBoolean("login_inflight") == true) errorMessage = "窗口已重建，上次登录已中断，请重试；不会自动重复提交。"
+        if (!waitingForNativeLogin && savedInstanceState?.getBoolean("login_inflight") == true) errorMessage = "上次登录尚未完成，请重试"
         
             // 🔄 每次启动 App 都同步云端激活配置（获取最新的 max_students）
         lifecycleScope.launch {
@@ -296,6 +312,8 @@ class LoginActivity : ComponentActivity() {
         outState.putBoolean("manual_login", manualLoginInteraction)
         outState.putInt("login_context_revision", loginContextRevision)
         outState.putBoolean("login_inflight", isLoading || captchaImageBytes != null)
+        outState.putBoolean("native_login_inflight", waitingForNativeLogin)
+        outState.putString("native_login_account", nativeLoginAccount)
         super.onSaveInstanceState(outState)
     }
 
@@ -328,7 +346,13 @@ class LoginActivity : ComponentActivity() {
 
     private fun openWebView() {
         val currentSchool = selectedLoginSchool
-        if(currentSchool?.id=="scvtc") {waitingForSchoolWeb=true;startActivity(Intent(this,com.tyust.course.scvtc.ScvtcWebActivity::class.java));return}
+        if(currentSchool?.id=="scvtc") {
+            schoolAuthenticationLauncher.launch(Intent(this,com.tyust.course.scvtc.ScvtcWebActivity::class.java)
+                .putExtra("url",cn.scvtc.campus.CasAuthManager.PROVIDED_H5_ENTRY)
+                .putExtra("verification_only",true)
+                .putExtra("expected_account",nativeLoginAccount.ifBlank { com.tyust.course.scvtc.ScvtcRuntime.account }))
+            return
+        }
         if (currentSchool != null && AcademicGatewayFactory.supports(currentSchool)) {
             val hosts = java.util.ArrayList<String>().apply {
                 add(currentSchool.domain)
@@ -623,7 +647,21 @@ class LoginActivity : ComponentActivity() {
     // ============ 密码登录 ============
 
     private fun handlePasswordLogin(username: String, password: String) {
-        if(selectedLoginSchool?.id=="scvtc"){openWebView();return}
+        if(selectedLoginSchool?.id=="scvtc"){
+            nativeLoginAccount=username.trim()
+            if(!nativeLoginAccount.matches(Regex("[0-9]{6,20}")) || password.isEmpty()) {
+                errorMessage="请输入学号和密码";return
+            }
+            manualLoginInteraction=true
+            waitingForNativeLogin=true
+            isLoading=true;errorMessage=null
+            lifecycleScope.launch {
+                try { com.tyust.course.scvtc.ScvtcRuntime.signIn(nativeLoginAccount,password).await() }
+                catch(e:kotlinx.coroutines.CancellationException){throw e}
+                catch(_:Exception){ /* The shared login state owns the user message. */ }
+            }
+            return
+        }
         val school = selectedLoginSchool
         Log.d(TAG, "handlePasswordLogin: school=${school?.name}, baseUrl=${school?.getBaseUrl()}, fullPath=${school?.getFullBasePath()}")
         if (school == null) {

@@ -15,6 +15,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
@@ -36,7 +37,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 internal data class PagePrompt(val title: String, val message: String, val challenge: JSONObject?, val result: CompletableDeferred<JSONObject?>, val choices: List<Pair<String, String>> = emptyList(), val image: File? = null, val directChoices: Boolean = false, val values: androidx.compose.runtime.snapshots.SnapshotStateMap<String, String> = mutableStateMapOf())
 
 /** Shared by a pinned main page and the standalone plugin page activity. */
-@Composable fun PluginPageContent(route: String, onNavigate: (String, JSONObject) -> Unit, onBack: () -> Unit, commandId: String? = null, pluginId: String? = null, params: JSONObject = JSONObject()) {
+@Composable fun PluginPageContent(route: String, onNavigate: (String, JSONObject) -> Unit, onBack: () -> Unit, commandId: String? = null, pluginId: String? = null, params: JSONObject = JSONObject(), standalone: Boolean = false) {
     val context = LocalContext.current
     val revision by PluginPages.revision.collectAsState()
     val accountRevision by PluginServiceAccounts.revision.collectAsState()
@@ -56,7 +57,9 @@ internal data class PagePrompt(val title: String, val message: String, val chall
     val accounts = remember(context) { PluginServiceAccounts(context) }
     val serviceAccount = serverId?.let { accounts.selected(pkg.manifest.id, it) }
     val pageParams = JSONObject((page?.params ?: JSONObject()).toString()).apply { params.keys().forEach { put(it, params.get(it)) } }
-    val scopeKey = "${pkg.digest}:$route:$commandId:$serviceAccount:${academicState.token}:$accountRevision:${PluginJson.canonical(pageParams)}"
+    val independentBrowser = template?.optJSONObject("web")?.optString("mode") == "browser" || serverId != null && !pkg.manifest.contributes.optBoolean("academic")
+    val academicScope = if (independentBrowser) "service" else PluginWebPolicy.academicScope(template, academicState.token)
+    val scopeKey = "${pkg.digest}:$route:$commandId:$serviceAccount:${academicScope}:$accountRevision:${PluginJson.canonical(pageParams)}"
     key(scopeKey) {
         val owner: PluginPageRetainer = androidx.lifecycle.viewmodel.compose.viewModel()
         val app = context.applicationContext
@@ -64,7 +67,7 @@ internal data class PagePrompt(val title: String, val message: String, val chall
             val session = if (serverId != null) accounts.session(pkg, serverId)
                 else PluginLegacyData.session(app, pkg, UserManager.getInstance().currentSchool, UserManager.getInstance().currentAccountStorageKey)
             PluginPageLifetime(app, pkg, session) {
-                !session.retired && PluginServiceAccounts.revision.value == accountRevision && UserManager.getInstance().sessionState.state.value.token == academicState.token &&
+                !session.retired && PluginServiceAccounts.revision.value == accountRevision && (independentBrowser || UserManager.getInstance().sessionState.state.value.token == academicState.token) &&
                 PluginServiceAccounts(app).current(pkg, session) && AcademicProviderRegistry.isCurrentPackage(pkg.manifest.id, pkg.digest) && AcademicProviderRegistry.isEnabled(pkg.manifest.id) &&
                 (commandId != null || PluginPages.registry.page(route) != null) && (serverId == null || PluginServiceAccounts(app).selected(pkg.manifest.id, serverId) == serviceAccount)
             }
@@ -80,7 +83,7 @@ internal data class PagePrompt(val title: String, val message: String, val chall
             if ((activityContext as? android.app.Activity)?.isChangingConfigurations != true) owner.release(lifetime)
         } }
         if (page?.renderer == "web") {
-            PluginWebPage(pkg, page.copy(params = pageParams), session, interaction, active)
+            PluginWebPage(pkg, page.copy(params = pageParams), session, interaction, active, onBack, scopeKey)
         } else if (commandId != null) {
             var commandStarted by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(false) }
             LaunchedEffect(commandId) {
@@ -95,26 +98,30 @@ internal data class PagePrompt(val title: String, val message: String, val chall
             val density = androidx.compose.ui.platform.LocalDensity.current
             val lifecycle = androidx.lifecycle.compose.LocalLifecycleOwner.current.lifecycle
             DisposableEffect(lifecycle, lifetime) {
-                val observer = androidx.lifecycle.LifecycleEventObserver { _, _ -> lifetime.foreground = lifecycle.currentState.isAtLeast(androidx.lifecycle.Lifecycle.State.RESUMED) }
+                val observer = androidx.lifecycle.LifecycleEventObserver { _, _ ->
+                    lifetime.foreground = lifecycle.currentState.isAtLeast(androidx.lifecycle.Lifecycle.State.RESUMED)
+                }
                 lifecycle.addObserver(observer); lifetime.foreground = lifecycle.currentState.isAtLeast(androidx.lifecycle.Lifecycle.State.RESUMED)
                 onDispose { lifecycle.removeObserver(observer); lifetime.foreground = false }
             }
             val snapshot by native.snapshot.collectAsState()
-            Column(Modifier.fillMaxSize().padding(horizontal = 16.dp).then(Modifier.onSizeChanged { size ->
+            val viewportModifier = Modifier.onSizeChanged { size ->
                 val width = size.width / density.density; val height = size.height / density.density
                 val viewport = JSONObject().put("widthDp", width).put("heightDp", height)
                     .put("widthClass", com.tyust.course.ui.system.windowWidthClass(width)).put("fontScale", density.fontScale)
                 if (lifetime.viewport?.toString() != viewport.toString()) { lifetime.viewport = viewport; if (lifetime.foreground) native.viewportChanged(viewport) }
-            }), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                if (snapshot.busy) LinearProgressIndicator(Modifier.fillMaxWidth())
-                if (snapshot.error.isNotBlank()) { Text(snapshot.error, color = MaterialTheme.colorScheme.error); SystemDialogButton(onClick = { native.open(route, pageParams) }) { Text("重试") } }
-                snapshot.view?.let { view -> NativePluginNode(view, host.files, Modifier.fillMaxSize()) { event, gesture -> native.event(snapshot.instance, event, gesture) } }
             }
+            val instance by rememberUpdatedState(snapshot.instance)
+            val emit = remember(native) { { event: JSONObject, gesture: Boolean -> native.event(instance, event, gesture) } }
+            NativePluginPageSurface(snapshot, host.files, page?.title ?: pkg.manifest.name, standalone, viewportModifier,
+                onExit = onBack, onRetry = { native.open(route, pageParams) }, emit = emit)
         }
     }
 }
 
 @Composable private fun rememberPageInteraction(state: PageInteraction, pluginName: String, onNavigate: (String, JSONObject) -> Unit, onBack: () -> Unit): NativePluginInteraction {
+    NativePluginDeviceLaunchers(state)
+    NativePluginVisualPrompts(state)
     val view = LocalView.current
     var prompt by state::prompt
     val fileLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { state.picker?.complete(it); state.picker = null }
@@ -149,8 +156,8 @@ internal data class PagePrompt(val title: String, val message: String, val chall
                     RadioButton(selected = choice == id, onClick = { choice = id }); SystemDialogButton(onClick = { choice = id }) { Text(label) }
                 } }
                 fields.forEach { field -> val id = field.getString("id")
-                    OutlinedTextField(values[id].orEmpty(), { if (it.length <= 2000) values[id] = it }, label = { Text(field.getString("label")) },
-                        visualTransformation = if (field.optString("type") == "password") PasswordVisualTransformation() else VisualTransformation.None, singleLine = true)
+                    com.tyust.course.ui.system.GlassFormField(values[id].orEmpty(), { if (it.length <= 2000) values[id] = it }, label = field.getString("label"),
+                        modifier = Modifier.fillMaxWidth(), password = field.optString("type") == "password")
                 }
                 if (p.challenge?.optBoolean("remember") == true) Row { Checkbox(save, { save = it }); Text("为此服务账号加密保存") }
             }

@@ -1,6 +1,6 @@
 # 构建原理
 
-川职·知学基于 zhengfang-apk 原生工程，保留 Compose 界面、插件平台、课表编辑、提醒和桌面组件。本校认证与接口位于 `app/src/main/java/cn/scvtc/campus`，页面和同步协调位于 `app/src/main/java/com/tyust/course/scvtc`，学校数据校验位于 `school-core`。插件中心的其他学校沿用各自适配器，不代表全部经过本项目实机验证。
+川职·知学基于 zhengfang-apk 原生工程，保留 Compose 界面、宿主协议、课表编辑、提醒和桌面组件。本校认证与接口位于 `app/src/main/java/cn/scvtc/campus`，页面和同步协调位于 `app/src/main/java/com/tyust/course/scvtc`，学校数据校验位于 `school-core`。应用的常用入口只提供川职服务，宿主底层保留上游接口兼容性。
 
 ```mermaid
 flowchart LR
@@ -12,7 +12,9 @@ flowchart LR
     C -->|会话过期| B
 ```
 
-`CasAuthManager` 负责官方认证；密码提交仍由官方表单执行。CAS、service 回调和 JWXT 各自取得 Cookie，`JwxtCookieJar` 按请求 URL 读取，不能把 CAS Cookie 当作教务 Session。`JwxtSessionManager` 必须调用真实学生身份接口并匹配账号，URL 到达学生主页不算成功。
+应用表单将账号密码交给 `CasAuthManager` 的应用级任务。在不展示的 WebView 中加载真实 CAS，等待表单挂载、校验来源和字段，再使用学校自己的提交处理器。CAS、service 回调和 JWXT 各自取得 Cookie，`JwxtCookieJar` 按请求 URL 读取，不能把 CAS Cookie 当作教务 Session。`JwxtSessionManager` 必须调用真实学生身份接口并匹配账号，URL 到达学生主页不算成功。
+
+`OfficialLoginMemory` 只把待核验输入短暂加密保存；真实身份接口通过以后才升级为长期本机凭据。登录由应用级协程执行，页面仅观察状态；同一任务不会因重复点击创建第二次认证。额外验证进入单独的官方页面，普通登录不需要用户操作网页。主动退出取消认证并移除当前账号凭据，切换账号则保留凭据和离线记录。
 
 App 优先恢复本地 Session，失效后尝试 SSO，再必要时使用本机加密凭据重新认证。成功后继续失败的数据读取。重试有边界，网络错误不触发清库。验证码或学校二次认证仍按学校要求完成。
 
@@ -46,7 +48,7 @@ App 优先恢复本地 Session，失效后尝试 SSO，再必要时使用本机�
 准备 JDK 21、Android SDK Platform 37.0、对应 Build Tools，设置 `JAVA_HOME` 和 `ANDROID_HOME`。
 
 ```sh
-./gradlew :school-core:test :school-parser:test :app:assembleRelease
+./gradlew :app:assembleRelease
 ```
 
 Windows 使用 `gradlew.bat`，内存较小时加 `--max-workers=1`。发布配置和原签名保存在仓库外；覆盖安装要求 applicationId、原证书与 versionCode 符合升级条件。最终检查 APK SHA-256、证书、ZIP 完整性、16 KiB 对齐和源码对应关系。更新元数据签名与 APK 原签名分别验证。编译通过不等于完成真机验收。

@@ -71,18 +71,83 @@ object ScvtcRuntime {
  val mutex=Mutex()
  private lateinit var progress:NativeSyncProgress
  val syncState get()=progress.state
- private val serviceJobs=mutableMapOf<String,Job>()
+ private val jobLock=Any()
+ private val serviceJobs=mutableMapOf<String,Deferred<Map<String,Extraction>>>()
+ val taskRunning=MutableStateFlow(false)
  private var firstSync:Job?=null
- fun startNativeSync(mode:String="range"){
-  if(firstSync?.isActive==true)return
-  firstSync=applicationJobs.launch{runCatching{synchronize(mode)}.onFailure{if(it is CancellationException)throw it;status.value="自动同步未完成；已有数据保留：${it.message.orEmpty().take(140)}"}}
+ private var loginJob:Deferred<cn.scvtc.campus.JwxtStudent>?=null
+ val loginState=MutableStateFlow(cn.scvtc.campus.NativeLoginState())
+ /** The caller observes an application task; leaving a page does not cancel it. */
+ fun signIn(a:String,password:String):Deferred<cn.scvtc.campus.JwxtStudent> = synchronized(jobLock) {
+  loginJob?.takeIf{!it.isCompleted}?.let{return@synchronized it}
+  require(a.matches(Regex("[0-9]{6,20}")) && password.length in 1..512){"请输入学号和密码"}
+  loginState.value=cn.scvtc.campus.NativeLoginState(a,busy=true,message="正在连接学校并核验学生身份…")
+  firstSync?.cancel();serviceJobs.values.toList().forEach{it.cancel()}
+  val job=applicationJobs.async(start=CoroutineStart.LAZY) {
+   try {
+    val student=networkMutex.withLock {
+     val memory=cn.scvtc.campus.OfficialLoginMemory(context)
+     val api=cn.scvtc.campus.JwxtApi(headers={memory.apiHeaders(a,it)})
+     val verified=cn.scvtc.campus.CasAuthManager(context,api).signIn(a,password)
+     val calendar=api.calendar().first
+     withContext(Dispatchers.Main) {
+      confirm(verified.account,calendar.semester)
+      registerVerifiedIdentity(verified.account,calendar.semester,
+       listOf("studentName","name","xm","姓名").firstNotNullOfOrNull{verified.fields[it]?.takeIf(String::isNotBlank)}.orEmpty())
+      revision.value++
+     }
+     verified
+    }
+    loginState.value=cn.scvtc.campus.NativeLoginState(a,verified=true,message="学校身份已核验，正在后台读取课表与其他数据")
+    student
+   } catch(e:CancellationException) {
+    loginState.value=cn.scvtc.campus.NativeLoginState(a,message="已停止本次登录，原数据保留");throw e
+   } catch(e:Exception) {
+    val extra=e is cn.scvtc.campus.JwxtAuthenticationRequired
+    loginState.value=cn.scvtc.campus.NativeLoginState(a,requiresVerification=extra,
+     message=if(extra)"学校暂时需要补充认证，已填信息会保留" else "这次登录未完成，请检查网络或稍后重试；原数据保留")
+    throw e
+   }
+  }
+  loginJob=job;taskRunning.value=true
+  job.invokeOnCompletion{cause->
+   synchronized(jobLock){if(loginJob===job)loginJob=null;updateTaskRunning()}
+   if(cause==null)startNativeSync()
+  }
+  job.start();job
  }
- fun stopNativeSync(){firstSync?.cancel();firstSync=null;status.value="已停止本次同步，已保存的数据保留"}
+ fun startNativeSync(mode:String="range"){
+  synchronized(jobLock){
+   if(taskRunning.value||syncState.value.busy)return
+   val a=account;val t=semester
+   val job=applicationJobs.launch(start=CoroutineStart.LAZY){
+    try{check(a==account&&t==semester);synchronize(mode)}
+    catch(e:CancellationException){throw e}
+    catch(e:Exception){status.value="同步未完成；已有数据保留"}
+   }
+   firstSync=job;taskRunning.value=true
+   job.invokeOnCompletion{synchronized(jobLock){if(firstSync===job)firstSync=null;updateTaskRunning()}}
+   job.start()
+  }
+ }
+ private fun updateTaskRunning(){taskRunning.value=loginJob?.isCompleted==false||firstSync?.isCompleted==false||serviceJobs.values.any{!it.isCompleted}}
+ fun stopNativeSync(){synchronized(jobLock){firstSync?.cancel();serviceJobs.values.toList().forEach{it.cancel()}};status.value="已停止本次同步，已保存的数据保留"}
  private val networkMutex=Mutex()
  fun refreshService(module:String){
-  synchronized(serviceJobs){
-   if(serviceJobs[module]?.isActive==true)return
-   serviceJobs[module]=applicationJobs.launch{try{synchronizeService(module)}catch(e:CancellationException){throw e}catch(e:Exception){status.value="此服务未更新；原缓存保留"}}
+  serviceRead(listOf(module))
+ }
+ fun refreshAcademics(){serviceRead(listOf("grades","credits"))}
+ /** Awaiting a shared application task never ties its network/save work to a page. */
+ private fun serviceRead(modules:List<String>):Deferred<Map<String,Extraction>> = synchronized(jobLock){
+  val a=account;val t=semester;val key="$a|$t|${modules.sorted().joinToString(",")}"
+  serviceJobs[key]?.takeIf{!it.isCompleted}?:applicationJobs.async(start=CoroutineStart.LAZY){
+   try{readServices(modules,a,t)}
+   catch(e:CancellationException){throw e}
+   catch(e:Exception){status.value="此服务未更新；原缓存保留";throw e}
+  }.also{job->
+   serviceJobs[key]=job;taskRunning.value=true
+   job.invokeOnCompletion{synchronized(jobLock){if(serviceJobs[key]===job)serviceJobs.remove(key);updateTaskRunning()}}
+   job.start()
   }
  }
  private val client=OkHttpClient.Builder().followRedirects(false).followSslRedirects(false).connectTimeout(15,TimeUnit.SECONDS).readTimeout(30,TimeUnit.SECONDS).build()
@@ -97,7 +162,7 @@ object ScvtcRuntime {
   require(a.isNotBlank()&&a==account&&t==semester){"官方身份与当前账号/学期不一致"}
   val user=UserManager.getInstance();val previousId=user.studentId
   user.currentSchool=user.getSchoolById("scvtc");user.studentId=a
-  if(name.isNotBlank())user.studentName=name
+  if(name.isNotBlank() || previousId!=a)user.studentName=name
   if(!user.isLoggedIn||user.sessionState.state.value.expired||previousId!=a)
    user.saveWebViewLogin(android.webkit.CookieManager.getInstance().getCookie(School.ORIGIN).orEmpty())
  }
@@ -106,7 +171,7 @@ object ScvtcRuntime {
   val previous=account;val previousTerm=semester
   if(previous.isNotBlank()){
    if(previousTerm.isNotBlank())prefs.edit().putString("term:$previous",previousTerm).apply()
-   clearAuthentication(previous)
+   clearAuthentication(previous,forgetCredentials=false)
   }
   prefs.edit().putString("account",a).putString("semester",prefs.getString("term:$a","")).remove("lastAttempt").apply()
  }
@@ -245,10 +310,12 @@ object ScvtcRuntime {
   catch(e:CancellationException){progress.phase(NativeSyncStage.CACHE,"已停止 · 使用本机缓存");throw e}
   catch(e:Exception){progress.failure(e);status.value="同步未完成，已保留离线课表";throw e}
  }
- suspend fun synchronizeService(module:String):Extraction=networkMutex.withLock{
-  require(module in cn.scvtc.campus.JwxtServices.endpoints)
-  val a=account;val t=semester;require(a.isNotBlank()&&t.isNotBlank())
-  progress.begin(a,t,School.service(module)?.title?:"教务数据",serviceSavedAt(module))
+ suspend fun synchronizeService(module:String):Extraction=serviceRead(listOf(module)).await().getValue(module)
+ private suspend fun readServices(modules:List<String>,a:String,t:String):Map<String,Extraction> = networkMutex.withLock{
+  require(modules.isNotEmpty()&&modules.all{it in cn.scvtc.campus.JwxtServices.endpoints})
+  require(a.isNotBlank()&&t.isNotBlank()){"请先连接学校教务"}
+  check(a==account&&t==semester){"账号或学期已切换"}
+  progress.begin(a,t,if(modules.size>1)"成绩与学分"else School.service(modules.single())?.title?:"教务数据",serviceSavedAt(modules.first()))
   progress.phase(NativeSyncStage.AUTHENTICATING,"正在认证学校账号…")
   try {
   val login=cn.scvtc.campus.OfficialLoginMemory(context);login.restoreSession(a)
@@ -258,9 +325,17 @@ object ScvtcRuntime {
    check(a==account&&t==semester)
    login.confirmed(a)
    progress.phase(NativeSyncStage.READING,"正在读取真实教务数据…")
-   val result=api.service(module,a,t)
-   progress.phase(NativeSyncStage.WRITING,"正在保存教务数据…")
-   saveService(result,true){a==account&&t==semester}.also{progress.committed(serviceSavedAt(module));progress.complete()}
+   val results=linkedMapOf<String,Extraction>()
+   for(module in modules){
+    currentCoroutineContext().ensureActive();check(a==account&&t==semester)
+    progress.phase(NativeSyncStage.READING,"正在读取${School.service(module)?.title?:"教务数据"}…")
+    val result=api.service(module,a,t)
+    progress.phase(NativeSyncStage.WRITING,"正在保存教务数据…")
+    results[module]=saveService(result,true){a==account&&t==semester}
+    progress.committed(serviceSavedAt(module))
+   }
+   progress.complete();status.value=if(modules.size>1)"成绩与学分已更新"else"${School.service(modules.single())?.title?:"教务数据"}已更新"
+   results
   }
   }catch(e:CancellationException){progress.phase(NativeSyncStage.CACHE,"已停止 · 使用本机缓存");throw e}
   catch(e:Exception){progress.failure(e);throw e}
@@ -289,17 +364,19 @@ object ScvtcRuntime {
   ScheduleReminderScheduler.get(context).updateTimeBase(key,semester,base.copy(firstWeekDate=date.toString()))
   ScheduleWidgetUpdater.update(context);revision.value++
  }
- fun clearAuthentication(a:String){
+ @JvmOverloads
+ fun clearAuthentication(a:String,forgetCredentials:Boolean=true){
   if(!::context.isInitialized || !::db.isInitialized)return
-  firstSync?.cancel();firstSync=null
-  cn.scvtc.campus.OfficialLoginMemory(context).forget(a)
+  synchronized(jobLock){loginJob?.cancel()}
+  stopNativeSync()
+  if(forgetCredentials)cn.scvtc.campus.OfficialLoginMemory(context).forget(a)
   ScvtcSyncWork.cancel(context)
   applicationJobs.launch(Dispatchers.Main.immediate){
    ScvtcWebSession.close()
    android.webkit.CookieManager.getInstance().removeAllCookies{android.webkit.CookieManager.getInstance().flush()}
    android.webkit.WebStorage.getInstance().deleteAllData()
   }
-  applicationJobs.launch{mutex.withLock{db.schedules().clearRecipes(a)}}
+  if(forgetCredentials)applicationJobs.launch{mutex.withLock{db.schedules().clearRecipes(a)}}
   if(account==a)prefs.edit().remove("account").remove("semester").remove("lastAttempt").apply()
   revision.value++;status.value="已退出，账号离线内容保留在本机"
  }

@@ -47,5 +47,8 @@ object ScheduleWidgetNavigation {
     fun matchesCurrentAccount(request: ScheduleWidgetRequest): Boolean = UserManager.getInstance().let {
         request.matches(it.currentAccountStorageKey, it.currentSchool?.id.orEmpty())
     }
+    fun openCourse(account: String, school: String, term: String, course: String) {
+        requested = ScheduleWidgetRequest(account, school, term, course, System.nanoTime())
+    }
     fun consume() { requested = null }
 }

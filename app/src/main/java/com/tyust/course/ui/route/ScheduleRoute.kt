@@ -98,7 +98,7 @@ private object ScheduleRouteMemoryCache {
 }
 
 @Composable
-fun ScheduleRoute(isActive: Boolean = true) {
+fun ScheduleRoute(isActive: Boolean = true, openSettings: Boolean = false, onSettingsOpened: () -> Unit = {}) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val isDemoMode = remember { UserManager.getInstance().isDemoMode }
@@ -153,6 +153,9 @@ fun ScheduleRoute(isActive: Boolean = true) {
     
     // Dialog State
     var showSettingsDialog by rememberSaveable { mutableStateOf(false) }
+    LaunchedEffect(openSettings, isActive) {
+        if (openSettings && isActive) { showSettingsDialog = true; onSettingsOpened() }
+    }
     var detailId by rememberSaveable(routeAccountKey) { mutableStateOf<String?>(null) }
     var quickCourseId by rememberSaveable(routeAccountKey) { mutableStateOf<String?>(null) }
     var detailSourceBounds by remember(routeAccountKey) { mutableStateOf<androidx.compose.ui.geometry.Rect?>(null) }

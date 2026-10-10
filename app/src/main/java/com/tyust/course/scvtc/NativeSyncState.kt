@@ -8,7 +8,7 @@ import java.util.Date
 enum class NativeSyncStage { NONE, PREPARING, AUTHENTICATING, READING, WRITING, SUCCESS, FAILED, OFFLINE, AUTH_REQUIRED, CACHE }
 data class NativeSyncState(
     val stage:NativeSyncStage=NativeSyncStage.NONE,val operation:String="课表",val lastAttempt:Long=0,
-    val lastSuccess:Long=0,val message:String="尚未同步",
+    val lastSuccess:Long=0,val message:String="尚未同步",val account:String="",val term:String="",
 ) {
     val busy get()=stage in setOf(NativeSyncStage.PREPARING,NativeSyncStage.AUTHENTICATING,NativeSyncStage.READING,NativeSyncStage.WRITING)
     val label get()=if(stage==NativeSyncStage.SUCCESS)"${operation}同步成功 · ${DateFormat.getTimeInstance(DateFormat.SHORT).format(Date(lastSuccess))}" else message
@@ -22,7 +22,7 @@ internal class NativeSyncProgress(private val context:Context) {
         key=java.security.MessageDigest.getInstance("SHA-256").digest("$account|$term|$operation".toByteArray()).joinToString(""){"%02x".format(it.toInt() and 255)}
         val success=prefs.getLong("success:$key",cachedAt)
         state.value=NativeSyncState(if(success>0)NativeSyncStage.CACHE else NativeSyncStage.NONE,operation,
-            prefs.getLong("attempt:$key",0),success,if(success>0)"本机缓存 · 点击刷新" else "尚未同步 · 点击连接")
+            prefs.getLong("attempt:$key",0),success,if(success>0)"本机缓存 · 点击刷新" else "尚未同步 · 点击连接",account,term)
     }
     fun begin(account:String,term:String,operation:String="课表",cachedAt:Long=0){
         restore(account,term,operation,cachedAt)

@@ -170,7 +170,7 @@ class MainActivity : FragmentActivity() {
 
         UserManager.getInstance().init(this)
         PluginPages.refresh()
-        intent.getStringExtra("pageId")?.let { if (PluginPages.registry.page(it) != null) PluginPages.requested.value = it }
+        PluginPages.accept(intent, restoring = savedInstanceState != null)
         if (savedInstanceState == null) com.tyust.course.schedule.CourseReminderNavigation.accept(intent)
         if (savedInstanceState == null) com.tyust.course.schedule.ScheduleWidgetNavigation.accept(intent)
 
@@ -223,7 +223,7 @@ class MainActivity : FragmentActivity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
-        intent.getStringExtra("pageId")?.let { if (PluginPages.registry.page(it) != null) PluginPages.requested.value = it }
+        PluginPages.accept(intent)
         com.tyust.course.schedule.CourseReminderNavigation.accept(intent)
         com.tyust.course.schedule.ScheduleWidgetNavigation.accept(intent)
     }
@@ -301,7 +301,11 @@ fun MainScreen(fragmentActivity: FragmentActivity) {
     val navigationMotion = com.tyust.course.ui.theme.rememberNavigationMotionState(selectedTab, currentAccountStorageKey + routes.joinToString(), accessibility.reduceMotion)
     val barMotion = com.tyust.course.ui.theme.rememberNavigationMotionState(selectedNavigationIndex, currentAccountStorageKey + items.joinToString { it.route }, accessibility.reduceMotion)
     val pageRequest by PluginPages.requested.collectAsState()
-    LaunchedEffect(pageRequest) { pageRequest?.let { openPage(it); PluginPages.requested.value = null } }
+    LaunchedEffect(pageRequest) { pageRequest?.let {
+        pageParameters = pageParameters + (it.route to it.params)
+        openPage(it.route)
+        PluginPages.consume(it)
+    } }
     LaunchedEffect(pageRevision, currentAccountStorageKey) {
         if (PluginPages.registry.page(selectedPage) == null) selectedPage = PluginPages.registry.fallback()
         pageHistory = pageHistory.filter { PluginPages.registry.page(it) != null }
@@ -330,10 +334,22 @@ fun MainScreen(fragmentActivity: FragmentActivity) {
     val density = LocalDensity.current
     val pageTravelPx = with(density) { 8.dp.roundToPx() }
     val schoolRevision by com.tyust.course.scvtc.ScvtcRuntime.revision.collectAsState()
-    var campusSettings by rememberSaveable{mutableStateOf(false)}
-    var campusTools by rememberSaveable{mutableStateOf(false)}
+    var campusSettings by rememberSaveable(currentAccountStorageKey){mutableStateOf(false)}
+    var campusTools by rememberSaveable(currentAccountStorageKey){mutableStateOf(false)}
+    var campusCredits by rememberSaveable(currentAccountStorageKey){mutableStateOf(false)}
+    var campusScheduleSettings by rememberSaveable(currentAccountStorageKey){mutableStateOf(false)}
     val campusRequest by com.tyust.course.scvtc.CampusNavigation.request.collectAsState()
-    LaunchedEffect(campusRequest){when(campusRequest){"profile"->campusSettings=true;"files"->campusTools=true;null->Unit;else->openPage(campusRequest!!)};com.tyust.course.scvtc.CampusNavigation.request.value=null}
+    LaunchedEffect(campusRequest){
+        when(campusRequest){
+            "profile"->campusSettings=true
+            "files"->campusTools=true
+            "credits"->{campusCredits=true;openPage("app.services")}
+            "schedule-settings"->{campusSettings=false;campusScheduleSettings=true;openPage("app.schedule")}
+            null->Unit
+            else->openPage(campusRequest!!)
+        }
+        com.tyust.course.scvtc.CampusNavigation.request.value=null
+    }
     val readerDockBackdrop=top.yukonga.miuix.kmp.blur.rememberLayerBackdrop()
     val updateState = rememberUpdateState()
     val recovery by SessionRenewer.state.collectAsState()
@@ -635,14 +651,14 @@ fun MainScreen(fragmentActivity: FragmentActivity) {
                                     "app.courses" -> com.tyust.course.scvtc.NextHome(schoolRevision,onSchedule={openPage("app.schedule")},onLogin={fragmentActivity.startActivity(Intent(fragmentActivity,LoginActivity::class.java))})
                                     "campus.nativeCourses" -> com.tyust.course.ui.route.CourseListRoute(isActive = selectedPage == route)
                                     "campus.nativeExtensions" -> com.tyust.course.academic.plugin.ExtensionCenterContent(onOpen={openPage(it)})
-                                    "app.schedule" -> com.tyust.course.ui.route.ScheduleRoute(isActive = selectedPage == route)
+                                    "app.schedule" -> com.tyust.course.ui.route.ScheduleRoute(isActive = selectedPage == route, openSettings=campusScheduleSettings, onSettingsOpened={campusScheduleSettings=false})
                                     "app.grab" -> com.tyust.course.ui.route.GrabProRoute()
                                     "app.grades" -> com.tyust.course.ui.route.GradesRoute()
                                     "app.settings" -> com.tyust.course.ui.route.SettingsRoute(
                                         onSurveyCenter = { initialSurveyId = null; showSurveyCenter = true },
                                         surveyUnreadCount = surveyFeed.unreadCount(System.currentTimeMillis())
                                     )
-                                    "app.services" -> com.tyust.course.scvtc.NextServices(official={openPage("app.schedule")})
+                                    "app.services" -> com.tyust.course.scvtc.NextServices(official={openPage("app.schedule")}, creditsOpen=campusCredits, onCreditsOpenChange={campusCredits=it})
                                     else -> com.tyust.course.academic.plugin.PluginPageContent(route, onNavigate = { next, params -> pageParameters = pageParameters + (next to params.toString()); openPage(next) }, onBack = { backPage() }, params = org.json.JSONObject(pageParameters[route] ?: "{}"))
                                 }
                                 }
@@ -685,7 +701,7 @@ fun MainScreen(fragmentActivity: FragmentActivity) {
             )
 
             if(campusSettings)com.tyust.course.ui.system.GlassSubpage(onDismiss={campusSettings=false}){close->
-              com.tyust.course.scvtc.NextProfile(schoolRevision,onLogin={fragmentActivity.startActivity(Intent(fragmentActivity,LoginActivity::class.java))},onTools={campusTools=true},onSchedule={campusSettings=false;openPage("app.schedule")},onBack=close)
+              com.tyust.course.scvtc.NextProfile(schoolRevision,onLogin={fragmentActivity.startActivity(Intent(fragmentActivity,LoginActivity::class.java))},onTools={campusTools=true},onSchedule={com.tyust.course.scvtc.CampusNavigation.request.value="schedule-settings"},onBack=close)
             }
             if(campusTools)com.tyust.course.ui.system.GlassSubpage(onDismiss={campusTools=false}){close->Column{com.tyust.course.scvtc.NextButton("返回",Modifier.statusBarsPadding().padding(12.dp),close);Box(Modifier.weight(1f)){com.tyust.course.scvtc.NextFileTools{fragmentActivity.startActivity(Intent(fragmentActivity,com.tyust.course.scvtc.ScvtcWebActivity::class.java))}}}}
             DialogHost(

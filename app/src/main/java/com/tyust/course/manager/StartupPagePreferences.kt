@@ -18,6 +18,8 @@ enum class StartupPage(val route: String, val label: String) {
 /** App preference shared across accounts; activity restoration still retains its current page. */
 class StartupPagePreferences(private val preferences: SharedPreferences) {
     fun read(): StartupPage = StartupPage.decode(runCatching { preferences.getString(KEY, null) }.getOrNull())
+    fun readExplicit(): StartupPage? = runCatching { preferences.getString(KEY, null) }.getOrNull()
+        ?.let { route -> StartupPage.entries.firstOrNull { it.route == route } }
 
     fun write(page: StartupPage) {
         preferences.edit().putString(KEY, page.route).apply()

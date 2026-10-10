@@ -147,12 +147,14 @@ class OfficialLoginMemory(private val context:Context) {
         val script=context.assets.open("official-login-memory.js").bufferedReader().use{it.readText()}
         if(WebViewFeature.isFeatureSupported(WebViewFeature.DOCUMENT_START_SCRIPT))WebViewCompat.addDocumentStartJavaScript(web,script,origins)
     }
-    fun confirmed(account:String) {
+    fun confirmed(account:String,promoteEnrollment:Boolean=false) {
         if(account.isBlank())return
+        lastAttempt=0L
         recoveringPage=""
         usedH5Entry=false
         rememberSession(account)
         prefs.edit().remove("attempt:$account").remove("pending:$account").apply()
+        if(!promoteEnrollment)return
         val value=enrollment(account)?:return
         if(account.isBlank()||value.optString("username")!=account)return
         recoveringPage=""
@@ -166,6 +168,11 @@ class OfficialLoginMemory(private val context:Context) {
     }
     /** Explicit native input is staged, and saved only after the real identity response. */
     fun configure(web:WebView,account:String,password:String,onResult:(Boolean)->Unit) {
+        awaitForm(web) { ready ->
+            if(ready) configureReady(web,account,password,onResult) else onResult(false)
+        }
+    }
+    private fun configureReady(web:WebView,account:String,password:String,onResult:(Boolean)->Unit) {
         val page=web.url.orEmpty()
         if(!trusted(page)||!account.matches(Regex("[0-9]{6,20}"))||password.length !in 1..512){onResult(false);return}
         prepare(web)
@@ -174,9 +181,13 @@ class OfficialLoginMemory(private val context:Context) {
             if(binding==null||web.url!=page||binding.optString("origin")!="https://${Uri.parse(page).host}"){onResult(false);return@evaluateJavascript}
             if(!stage(JSONObject().put("page",page).put("binding",binding).put("username",account).put("password",password))) {onResult(false);return@evaluateJavascript}
             prefs.edit().remove("pending:$account").remove("attempt:$account").apply();recoveringPage=""
+            // Fill a human-challenge form, but only report automatic submission
+            // when the official submit handler can actually be invoked.
+            web.evaluateJavascript("Boolean(window.__officialLoginMemory?.matches($binding))"){canSubmit->
             web.evaluateJavascript("window.__officialLoginMemory?.configure($binding,${JSONObject.quote(account)},${JSONObject.quote(password)})"){value->
                 if(value!="true")prefs.edit().remove("enrollment:$account").apply()
-                onResult(value=="true")
+                onResult(value=="true" && canSubmit=="true")
+            }
             }
         }
     }
@@ -184,13 +195,36 @@ class OfficialLoginMemory(private val context:Context) {
     fun failedNetwork(account:String){recoveringPage="";usedH5Entry=false;prefs.edit().remove("pending:$account").apply()}
     /** The official click handler performs its own CAS encryption; no guessed password protocol. */
     fun recover(web:WebView,account:String,onResult:(Boolean)->Unit) {
+        awaitForm(web) { ready ->
+            if(ready) recoverBoundForm(web,account,onResult) else onResult(false)
+        }
+    }
+    private fun awaitForm(web:WebView,onResult:(Boolean)->Unit) {
+        val page=web.url.orEmpty()
+        if(!trusted(page)){onResult(false);return}
+        var probes=0
+        // CAS is a SPA: document load is earlier than its visible form mounting.
+        // Wait for a recognisable form without sending credentials or clicking.
+        fun ready(){
+            if(web.url!=page){onResult(false);return}
+            prepare(web)
+            web.evaluateJavascript("!!window.__officialLoginMemory?.describe()"){result->
+                if(web.url!=page)onResult(false)
+                else if(result=="true")onResult(true)
+                else if(++probes<20)web.postDelayed({ready()},400)
+                else onResult(false)
+            }
+        }
+        ready()
+    }
+    private fun recoverBoundForm(web:WebView,account:String,onResult:(Boolean)->Unit) {
         val url=web.url.orEmpty()
         if(url==recoveringPage && System.currentTimeMillis()-lastAttempt<120_000){onResult(true);return}
         lastAttempt=maxOf(lastAttempt,prefs.getLong("attempt:$account",0L))
         // A pending attempt is bounded by the same throttle. A failed login or
         // process death must not disable all future recoveries permanently.
         if(account.isBlank()||!trusted(url)||System.currentTimeMillis()-lastAttempt<120_000){onResult(false);return}
-        val saved=prefs.getString(account,null)?.let{open(account,it)}?:run{onResult(false);return}
+        val saved=enrollment(account)?:prefs.getString(account,null)?.let{open(account,it)}?:run{onResult(false);return}
         if(saved.getJSONObject("binding").optString("origin")!="https://${Uri.parse(url).host}"){onResult(false);return}
         val script=context.assets.open("official-login-memory.js").bufferedReader().use{it.readText()}
         web.evaluateJavascript(script,null)

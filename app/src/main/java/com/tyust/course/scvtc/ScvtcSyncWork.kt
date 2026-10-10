@@ -18,7 +18,7 @@ object ScvtcSyncWork {
     fun start(app: Application) {
         app.registerActivityLifecycleCallbacks(object : Application.ActivityLifecycleCallbacks {
             override fun onActivityResumed(activity: Activity) {
-                if (activity is ScvtcWebActivity) return
+                if (activity is ScvtcWebActivity || activity is com.tyust.course.LoginActivity) return
                 scope.launch {
                     if (eligible()) {
                         ScvtcRuntime.restoreLastGood()

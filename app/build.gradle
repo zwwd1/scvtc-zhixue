@@ -176,6 +176,9 @@ android.sourceSets.main.assets.srcDir(donationAssets.get().asFile)
 tasks.named('preBuild') { dependsOn(stageCampusDonation) }
 
 dependencies {
+    implementation 'org.mozilla.geckoview:geckoview:157.0.20261005135250'
+    implementation 'org.maplibre.gl:android-sdk-opengl:13.6.1'
+    implementation 'com.microsoft.onnxruntime:onnxruntime-android:1.29.0'
     implementation 'androidx.work:work-runtime-ktx:2.10.1'
     implementation project(':school-core')
     implementation project(':school-parser')

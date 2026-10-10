@@ -30,6 +30,7 @@ class ScvtcWebActivity:FragmentActivity(){
   super.onCreate(state);enableEdgeToEdge()
   val module=intent.getStringExtra("module")?:"official"
   val c=ScvtcWebSession.obtain(this,intent.getStringExtra("url")).let{ScvtcWebSession.controller}
+  c?.authenticationAccount=intent.getStringExtra("expected_account").orEmpty()
   c?.module=module;c?.begin()
   ScvtcWebSession.fileChooser={callback,parameters->
    pendingFile?.onReceiveValue(null);pendingFile=callback
@@ -40,6 +41,11 @@ class ScvtcWebActivity:FragmentActivity(){
    true
   }
   setContent{NextTheme{
+   LaunchedEffect(c) {
+    if(intent.getBooleanExtra("verification_only",false)) c?.authenticationVerified?.collect { verified ->
+     if(verified) { setResult(RESULT_OK);finish() }
+    }
+   }
    val page by ScvtcWebSession.page.collectAsState()
    var full by rememberSaveable{mutableStateOf(false)}
    var ask by remember{mutableStateOf(false)};var menu by remember{mutableStateOf(false)};var login by remember{mutableStateOf(false)}

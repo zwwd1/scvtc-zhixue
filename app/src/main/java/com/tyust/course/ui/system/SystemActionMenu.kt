@@ -27,7 +27,7 @@ import com.tyust.course.ui.system.glass.glassSheet
 import com.tyust.course.ui.theme.ModuleMotion
 import com.tyust.course.ui.theme.MotionEasing
 
-data class SystemMenuAction(val title: String, val icon: ImageVector, val onClick: () -> Unit, val destructive: Boolean = false)
+data class SystemMenuAction(val title: String, val icon: ImageVector, val onClick: () -> Unit, val destructive: Boolean = false, val enabled: Boolean = true)
 
 @Composable
 fun SystemActionMenu(description: String, actions: List<SystemMenuAction>, modifier: Modifier = Modifier,
@@ -62,10 +62,11 @@ fun SystemActionMenu(description: String, actions: List<SystemMenuAction>, modif
                 .clip(RoundedCornerShape(16.dp)).verticalScroll(rememberScrollState()).padding(vertical = 4.dp)) {
                 actions.forEachIndexed { index, action ->
                     Row(Modifier.fillMaxWidth().heightIn(min = rowHeight).clickable(
-                        enabled = expanded, role = Role.Button, onClick = { pendingAction = action.onClick; expanded = false }
+                        enabled = expanded && action.enabled, role = Role.Button, onClick = { pendingAction = action.onClick; expanded = false }
                     ).padding(horizontal = 16.dp, vertical = 8.dp),
                         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        val color = if (action.destructive) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface
+                        val baseColor = if (action.destructive) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface
+                        val color = baseColor.copy(alpha = if (action.enabled) 1f else 0.4f)
                         Text(action.title, Modifier.weight(1f), style = MaterialTheme.typography.bodyLarge, color = color)
                         ActionLineIcon(action.icon, null, Modifier.size(20.dp), tint = color)
                     }

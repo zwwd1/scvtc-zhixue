@@ -1,51 +1,52 @@
 # 川职·知学
 
-四川职业技术学院非官方 Android 应用，由 **zwwd1** 维护。1.0.0 是本项目第一版，当前源码维护版为 **1.2.1**；已公开的正式 APK 为 **1.2.0**。知学保留原生课表、成绩卡片、考试、提醒和小组件，服务中心只显示课表、成绩、学分，其他业务通过学校官方教务页面办理。
+四川职业技术学院同学的课表和教务记录工具。首页看今天的课程，课表看整周安排，成绩与学分单独查看；其他学校业务从官方教务入口办理。
 
-## 1.2.1
+项目由 [zwwd1](https://github.com/zwwd1) 维护，基于已有 Android 项目重构，保留原生页面、玻璃动效、课程编辑、提醒和小组件。它是非官方应用，教务数据以学校系统为准。
 
-首页和服务中心共用原生成绩页，增加搜索、课程性质筛选与排序，导出遵循当前筛选结果。先显示本机加密缓存，刷新失败保留成绩；完善学分概况、同步任务、退出确认与 AI 停止/重试和配置保存。
+[下载最新版](https://github.com/zwwd1/scvtc-zhixue/releases/latest) · [使用方法](docs/SCVTC_USAGE.md) · [反馈问题](https://github.com/zwwd1/scvtc-zhixue/issues)
 
-[具体操作、修改位置与待用户验收事项](docs/UI_FLOWS_20261010.md)。保留现有 Miuix、壁纸和完整玻璃动效。本轮不连接手机，不执行功能或性能测试；必要构建结果见验证报告。
+## 开始使用
 
-## 1.2.0
+1. 安装 APK。装过知学的话，直接覆盖安装，不用先卸载。
+2. 点击“连接学校”，填写学校统一认证的学号和密码，选择“登录并自动同步”。
+3. 应用核验学生身份后开始后台同步。离开登录页也会继续读取，首页可以查看进度和最近成功时间。
+4. 点今天的课程查看详情，或进入周课表。成绩支持学期切换、搜索、筛选和导出；学分页可以直接跳到对应学期的课程。
 
-合并外观入口，顶栏按钮、子页壁纸、课表与底栏统一风格。液态玻璃关闭后全应用使用高斯模糊。修复同步页遮挡和成绩底栏，精简首页，移除问卷、插件、统一登录适配入口，加入本机加密的 AI 配置与对话。使用原创川职月光和小澄五种状态。
+会话过期后，会先尝试恢复学校登录，再继续刚才的数据读取。学校要求验证码或二次认证时，用“补充认证”完成即可；已填的学号和密码会保留。修改学校密码后需要更新本机保存的密码。
 
-[按本次 IMG-01～IMG-17 的修改与验收](docs/OPTIMIZATION_20261010.md) · [原创素材](docs/BRANDING_20261010.md)。本轮不连接手机、不执行功能或性能测试，编译和签名不能代替实际体验。历史验收保留在对应日期报告中。
+刷新失败会保留已有记录。没有取得数据和学校确认没有记录是两种状态，页面会分别说明。
 
-1.2.1 正式 GitHub 发布目前被插件平台一致性检查拦住：项目仍使用已发布的 3.2.9 契约，上游现为 3.5.0。本轮不冒称支持新契约，也不绕过发布检查。新构建 APK 与验证记录作为本机交付提供，源码在本项目继续维护。
+## 界面和日常操作
 
-## 下载
+首页、课表、服务中心、设置共用顶栏按钮、壁纸和外观设置。液态玻璃开关统一控制，关闭后使用高斯模糊；底栏的原有动效保留，效果参数仍可自行调整。
 
-- [1.2.0 正式原签名 APK](https://github.com/zwwd1/scvtc-zhixue/releases/download/v1.2.0/scvtc-zhixue-1.2.0.apk) · [SHA-256](https://github.com/zwwd1/scvtc-zhixue/releases/download/v1.2.0/scvtc-zhixue-1.2.0.apk.sha256)
-- [1.2.0 正式发布页](https://github.com/zwwd1/scvtc-zhixue/releases/tag/v1.2.0) · [1.2.0 对应源码](https://github.com/zwwd1/scvtc-zhixue/archive/refs/tags/v1.2.0.zip)
-- [构建与签名对应关系](BUILD_PROVENANCE.json) · [验证范围](VERIFICATION.md)
+服务中心保留课表、成绩和学分入口。请假、学籍等其他业务进入学校官方页面，不显示没有接通的数据。AI 助手需要你自己配置模型服务，看板娘“小澄”有不同状态。
 
-最低 Android 13。已有安装请直接覆盖，保留应用数据；不要先卸载。自行更换签名的构建不能覆盖本项目原签名 APK。
+## 隐私
 
-## 使用与原理
+学校密码、会话和服务查询缓存使用 Android Keystore 与 AES-GCM 加密，并按账号隔离。密码不会放进源码、安装包资源、普通日志或导出备份。课表的 Room 数据库位于应用沙箱里，不宣称整个数据库都使用了 SQLCipher。
 
-首次在官方 CAS 完成登录，App 继续建立教务 Session，并用需要学生身份的真实 JSON API 核验。成功后加密保存认证，再次启动检查 Session；过期时恢复 SSO 或使用本机凭据重建认证，再继续同步。登录 URL 到达主页不能单独证明成功。学校密码变更或额外验证仍需本人处理，失败保留最后成功数据。
+云服务和匿名统计已暂停。AI 的密钥和历史在本机加密保存；只有开启课表授权，助手才会向你配置的服务发送课程上下文。
 
-| 需要什么 | 入口 |
-| --- | --- |
-| 安装、登录和日常操作 | [使用方法](docs/SCVTC_USAGE.md) |
-| 认证、真实接口、缓存和编译 | [构建原理](docs/SCVTC_ARCHITECTURE.md) |
-| 本机加密、网络和数据删除 | [隐私说明](docs/SCVTC_PRIVACY.md) |
-| 问题反馈 | [本项目 Issues](https://github.com/zwwd1/scvtc-zhixue/issues) |
-| 轻量课表 | [川职·课间](https://github.com/zwwd1/scvtc-kejian) |
+[完整隐私说明](docs/SCVTC_PRIVACY.md)
 
-成绩与学分使用学校真实 JSON，保留实际学期和完整分页；毕业要求与成绩所得分开，未知字段不作为假零值。学校接口未核验的功能使用明确的官网入口，不编造通知、成绩或课表。
+## 源码与构建
 
-## 数据与构建
+`cn/scvtc/campus` 负责学校认证和真实接口，`com/tyust/course/scvtc` 负责同步与应用页面，`school-core` 保存数据规则。认证完成还要调用学生身份接口，进入某个网页地址不算登录成功。
 
-学校凭据由 Android Keystore 与 AES-256-GCM 保护，服务查询缓存按账号、学期和模块加密。普通课表 Room 数据依靠应用沙箱与设备存储加密，不宣称 SQLCipher 全库加密。**云同步与匿名统计暂停**。系统自动备份关闭；个人导出由用户主动操作。
+构建使用 JDK 21、Android SDK 37.0 和 Gradle Wrapper：
 
-学校认证与接口位于 cn/scvtc/campus，同步和 UI 位于 com/tyust/course/scvtc，school-core 负责数据规则。AI Key 与历史在 noBackupFilesDir 中 AES-GCM 加密，只有用户启用课表授权才向配置的模型服务发送课程上下文。使用 JDK 21、Android SDK 37.0 和项目 Gradle Wrapper 构建。原签名配置通过仓库外环境变量提供；私钥、密码、个人截图和原始学校响应不进入源码。
+```powershell
+.\gradlew.bat :app:assembleRelease
+```
 
-发布工作流只重组已签名的本机 APK，核对 SHA-256、包名、版本、原证书和嵌入的源码提交，不接触 Android 私钥。正式 Release 标签指向 APK 对应源码，更新清单在发布文件可用后更新。
+签名配置放在仓库之外。同一应用的正式更新沿用原签名；发布前核对安装包、源码、版本和签名，并检查插件平台的一致性。
 
-## 致谢与许可
+[构建原理](docs/SCVTC_ARCHITECTURE.md) · [这版改了什么](release-notes/v1.2.2.md) · [实际验证范围](VERIFICATION.md)
 
-应用基底：[zhengfang-apk](https://github.com/znjhahaha/zhengfang-apk)；[SleepDown-Schedule](https://github.com/xiaomanjun233/SleepDown-Schedule) 提供界面与动效参考。原项目许可证、版权及第三方组件声明保留。应用中的维护、更新与反馈属于本项目，依法必要的原作者信息仅保留在致谢与许可中。本项目不代表学校或原项目官方。
+## 致谢
+
+[zhengfang-apk](https://github.com/znjhahaha/zhengfang-apk) 提供应用基底，[SleepDown-Schedule](https://github.com/xiaomanjun233/SleepDown-Schedule) 提供界面和动效参考。原项目和第三方组件的许可证、必要版权声明保留在仓库中。
+
+只想看课表，也可以使用：[川职·课间](https://github.com/zwwd1/scvtc-kejian)。
