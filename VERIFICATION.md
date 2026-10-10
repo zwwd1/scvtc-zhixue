@@ -22,3 +22,5 @@
 [本轮交互修改与使用步骤](docs/ITERATION_1_2_2.md) · [此前逐图修改](docs/OPTIMIZATION_20261010.md) · [使用方法](docs/SCVTC_USAGE.md) · [隐私与加密](docs/SCVTC_PRIVACY.md)。历史验证不能代替本轮验证。
 
 插件平台 3.6.0 线上一致性检查通过。SDK 开发包、契约、文档和规则按原发布门槛校验；工具链自测依据上游公开收据，不是本机执行的应用测试。详情见 [平台同步记录](docs/PLUGIN_PLATFORM_3_6.md)。
+
+GitHub Release 已发布：[1.2.2](https://github.com/zwwd1/scvtc-zhixue/releases/tag/v1.2.2)。下载 APK 的字节数及 SHA-256 与本机新包一致，版本标签指向上述构建提交；[发布检查](https://github.com/zwwd1/scvtc-zhixue/actions/runs/38053383028)中的平台一致性与原签名 APK 校验均通过。应用内更新清单使用既有 `zhixue-update-20261008` 密钥签名，自校验通过，未更换更新公钥。

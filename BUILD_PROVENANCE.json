@@ -48,7 +48,17 @@
     "sha256": "f4404cd788bb26860687a832f184b8efb35b14153fd5724a50a403304d5db514"
   },
   "expectedReleaseUrl": "https://github.com/zwwd1/scvtc-zhixue/releases/tag/v1.2.2",
-  "releasePublicationStatus": "pending",
+  "releasePublicationStatus": "published",
   "cloudServicesPaused": true,
-  "report": "VERIFICATION.md"
+  "report": "VERIFICATION.md",
+  "releasePublished": true,
+  "releaseUrl": "https://github.com/zwwd1/scvtc-zhixue/releases/tag/v1.2.2",
+  "releaseVerifiedAssetSha256": "630520b1e3745413fc517f1c9ad52aaf5dc7df5b358c4743aec8fc71634dced4",
+  "releaseWorkflow": "https://github.com/zwwd1/scvtc-zhixue/actions/runs/38053383028",
+  "signedUpdateManifest": {
+    "keyId": "zhixue-update-20261008",
+    "originalPinnedKey": true,
+    "signatureVerified": true,
+    "version": "1.2.2"
+  }
 }
