@@ -73,6 +73,7 @@ private fun AcademicGradesContent(school: SchoolConfig, account: String, provide
     val cache = "academic.grades:$account:$provider"
     var report by rememberPageData("$cache:overall") { AcademicGradeReport(emptyList()) }
     var reportLoaded by rememberPageData("$cache:overall.loaded") { false }
+    var cacheReady by remember(session.token) { mutableStateOf(school.id != "scvtc") }
     var catalog by rememberPageData<AcademicStudyCatalog?>("$cache:terms") { null }
     var termReports by rememberPageData<Map<String, AcademicGradeReport>>("$cache:reports") { emptyMap() }
     var semesterChosen by rememberSaveable { mutableStateOf(semester.isNotBlank()) }
@@ -88,6 +89,7 @@ private fun AcademicGradesContent(school: SchoolConfig, account: String, provide
     var revision by remember { mutableIntStateOf(0) }
     var overallRevision by remember { mutableIntStateOf(0) }
     var termRevision by remember { mutableIntStateOf(0) }
+    var refreshTerm by remember { mutableStateOf<String?>(null) }
     var exams by rememberPageData<List<ExamItemUi>>("$cache:exams") { emptyList() }
     var examsLoaded by rememberPageData("$cache:exams.loaded") { false }
     var examLoading by remember { mutableStateOf(false) }
@@ -123,8 +125,31 @@ private fun AcademicGradesContent(school: SchoolConfig, account: String, provide
             Unit
         }) else null)
 
+    // The school cache is encrypted and account-scoped. Opening an academic page need not log in again.
+    LaunchedEffect(session.token) {
+        if (school.id != "scvtc") return@LaunchedEffect
+        try {
+            val saved = withContext(Dispatchers.IO) { com.tyust.course.scvtc.ScvtcNativeAdapter(account).cachedGrades() }
+            if (saved != null && sessions.isCurrent(expectedSession)) {
+                if (!reportLoaded) { report = saved; reportLoaded = true }
+                val savedTerms = saved.grades.map { it.term }.filter(String::isNotBlank).distinct()
+                val copies = savedTerms.associateWith { saved.forSemester(it) }
+                termReports = copies + termReports
+                if (catalog == null) {
+                    val current = com.tyust.course.scvtc.ScvtcRuntime.semester
+                    val ids = (savedTerms + current).filter(String::isNotBlank).distinct().sortedDescending()
+                    catalog = AcademicStudyCatalog(ids.map { AcademicTerm(it) }, AcademicTerm(current))
+                    catalogAttempted = true
+                }
+            }
+        } catch (e: CancellationException) { throw e }
+        catch (e: Exception) { if (sessions.isCurrent(expectedSession)) overallError = loadError(e) }
+        finally { if (sessions.isCurrent(expectedSession)) cacheReady = true }
+    }
+
     // Catalog and overall results are independent: a failed catalog cannot discard grades.
-    LaunchedEffect(revision, session.token) {
+    LaunchedEffect(revision, session.token, cacheReady) {
+        if (!cacheReady) return@LaunchedEffect
         if (0 !in supportedTabs) { loading = false; return@LaunchedEffect }
         if (catalog != null && revision == 0) return@LaunchedEffect
         catalogError = ""; catalogLoading = true
@@ -137,7 +162,8 @@ private fun AcademicGradesContent(school: SchoolConfig, account: String, provide
         catch (e: Exception) { if (sessions.isCurrent(expectedSession)) catalogError = loadError(e) }
         finally { if (sessions.isCurrent(expectedSession) && coroutineContext[kotlinx.coroutines.Job]?.isActive == true) { catalogLoading = false; catalogAttempted = true } }
     }
-    LaunchedEffect(overallRevision, session.token) {
+    LaunchedEffect(overallRevision, session.token, cacheReady) {
+        if (!cacheReady) return@LaunchedEffect
         if (0 !in supportedTabs || (reportLoaded && overallRevision == 0)) return@LaunchedEffect
         overallLoading = true; overallError = ""
         try {
@@ -166,17 +192,23 @@ private fun AcademicGradesContent(school: SchoolConfig, account: String, provide
             (reportLoaded || overallError.isNotBlank()) -> overallError.ifBlank { "学校暂未返回此学期，请刷新学期列表或重新选择" }
         else -> ""
     }
-    LaunchedEffect(semester, selectedTerm != null, termRevision, session.token) {
+    LaunchedEffect(semester, selectedTerm != null, termRevision, session.token, cacheReady) {
+        if (!cacheReady) return@LaunchedEffect
         if (semester.isBlank() || 0 !in supportedTabs || selectedTerm == null) { loading = false; return@LaunchedEffect }
         val requested = semester
-        if (termReports.containsKey(requested)) { loading = false; return@LaunchedEffect }
+        if (termReports.containsKey(requested) && refreshTerm != requested) { loading = false; return@LaunchedEffect }
         loading = true; error = ""
         try {
             val loaded = withContext(Dispatchers.IO) { AcademicStudyBridge.reader(school, account, expectedSession).grades(selectedTerm).forSemester(requested) }
             if (sessions.isCurrent(expectedSession) && latestSemester == requested) termReports = termReports + (requested to loaded)
         } catch (e: CancellationException) { throw e }
         catch (e: Exception) { if (sessions.isCurrent(expectedSession) && latestSemester == requested) error = loadError(e) }
-        finally { if (sessions.isCurrent(expectedSession) && latestSemester == requested && coroutineContext[kotlinx.coroutines.Job]?.isActive == true) loading = false }
+        finally {
+            if (sessions.isCurrent(expectedSession) && latestSemester == requested && coroutineContext[kotlinx.coroutines.Job]?.isActive == true) {
+                loading = false
+                if (refreshTerm == requested) refreshTerm = null
+            }
+        }
     }
     LaunchedEffect(tab, examRevision, session.token) {
         if (tab != 2 || examsLoaded || 2 !in supportedTabs) return@LaunchedEffect
@@ -217,10 +249,11 @@ private fun AcademicGradesContent(school: SchoolConfig, account: String, provide
         semesterIsLoading = loading || (selectedTerm == null && catalogLoading) || (terms.isEmpty() && overallLoading), overallGrades = overallGrades,
         overallStats = overallStats, overallIsLoading = overallLoading,
         examList = exams, examIsLoading = examLoading,
-        onRefresh = { when (tab) { 2 -> { examsLoaded = false; examRevision++ }; 1 -> overallRevision++; else -> { termReports = termReports - semester; revision++; termRevision++ } } },
+        onRefresh = { when (tab) { 2 -> { examsLoaded = false; examRevision++ }; 1 -> overallRevision++; else -> { refreshTerm = semester; revision++; termRevision++ } } },
         semesterError = selectionError.ifBlank { error }.ifBlank { if (terms.isEmpty()) catalogError.ifBlank { overallError } else "" },
         overallError = overallError, examError = examError,
         onExportGrades = { exportAcademicGrades(context, it) }, supportedTabs = supportedTabs,
+        onOpenOfficialExams = if (school.id == "scvtc") ({ context.startActivity(Intent(context, com.tyust.course.scvtc.ScvtcWebActivity::class.java).putExtra("module", "exams")) }) else null,
         semestersLoading = catalogLoading, semestersError = catalogError,
         onRefreshSemesters = {
             revision++

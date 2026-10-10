@@ -172,11 +172,16 @@ fun GradesScreen(
     semesterLabels: Map<String, String> = emptyMap(),
     semestersLoading: Boolean = false,
     semestersError: String = "",
-    onRefreshSemesters: (() -> Unit)? = null
+    onRefreshSemesters: (() -> Unit)? = null,
+    onOpenOfficialExams: (() -> Unit)? = null
 ) {
     val availableTabs = listOf(0, 1, 2).filter { it in supportedTabs }.ifEmpty { listOf(0, 1, 2) }
     val tabTitles = availableTabs.map { listOf("学期", "总体", "考试")[it] + if (it in supportedTabs) "" else " · 未适配" }
-    val isRefreshing = semesterIsLoading || overallIsLoading || examIsLoading
+    val isRefreshing = when (currentTab) { 0 -> semesterIsLoading; 1 -> overallIsLoading; else -> examIsLoading }
+    val semesterBrowser = rememberSaveable(saver = GradeBrowserState.Saver) { GradeBrowserState() }
+    val overallBrowser = rememberSaveable(saver = GradeBrowserState.Saver) { GradeBrowserState() }
+    val visibleSemester = remember(semesterGrades, semesterBrowser.query, semesterBrowser.sort, semesterBrowser.type) { semesterBrowser.filter(semesterGrades) }
+    val visibleOverall = remember(overallGrades, overallBrowser.query, overallBrowser.sort, overallBrowser.type) { overallBrowser.filter(overallGrades) }
     val subtitle = when (currentTab) {
         0 -> "${semesterGrades.size} 门课程"
         1 -> "累计成绩与分布概览"
@@ -241,14 +246,14 @@ fun GradesScreen(
                     metrics = metrics,
                     sampleBackdrop = headerSampleBackdrop,
                     shareEnabled = when (currentTab) {
-                        0 -> semesterGrades.isNotEmpty()
-                        1 -> overallGrades.isNotEmpty()
+                        0 -> visibleSemester.isNotEmpty()
+                        1 -> visibleOverall.isNotEmpty()
                         else -> false
                     },
                     showShare = currentTab != 2,
                     isRefreshing = isRefreshing,
                     onShare = {
-                        val grades = if (currentTab == 0) semesterGrades else overallGrades
+                        val grades = if (currentTab == 0) visibleSemester else visibleOverall
                         if (grades.isNotEmpty()) onExportGrades(grades)
                     },
                     onRefresh = onRefresh
@@ -280,7 +285,7 @@ fun GradesScreen(
                         semesters = semesters,
                         semesterLabels = semesterLabels,
                         currentSemester = currentSemester,
-                        onSemesterChange = onSemesterChange,
+                        onSemesterChange = { semesterBrowser.clear(); onSemesterChange(it) },
                         isLoading = semesterIsLoading,
                         error = semesterError,
                         listState = semesterListState,
@@ -288,7 +293,9 @@ fun GradesScreen(
                         bottomInset = contentBottomInset,
                         semestersLoading = semestersLoading,
                         semestersError = semestersError,
-                        onRefreshSemesters = onRefreshSemesters
+                        onRefreshSemesters = onRefreshSemesters,
+                        visibleGrades = visibleSemester, browser = { GradeBrowserControls(semesterBrowser, semesterGrades, visibleSemester.size) },
+                        onRefresh = onRefresh
                     )
 
                     1 -> OverallGradesContent(
@@ -298,7 +305,9 @@ fun GradesScreen(
                         error = overallError,
                         listState = overallListState,
                         topInset = contentTopInset,
-                        bottomInset = contentBottomInset
+                        bottomInset = contentBottomInset,
+                        visibleGrades = visibleOverall, browser = { GradeBrowserControls(overallBrowser, overallGrades, visibleOverall.size) },
+                        onRefresh = onRefresh
                     )
 
                     else -> ExamScheduleContent(
@@ -307,7 +316,8 @@ fun GradesScreen(
                         error = examError,
                         listState = examListState,
                         topInset = contentTopInset,
-                        bottomInset = contentBottomInset
+                        bottomInset = contentBottomInset,
+                        onRefresh = onRefresh, onOpenOfficial = onOpenOfficialExams
                     )
                 }
             }
@@ -347,9 +357,10 @@ private fun OverallGradesContent(
     error: String,
     listState: LazyListState,
     topInset: Dp,
-    bottomInset: Dp
+    bottomInset: Dp,
+    visibleGrades: List<GradeItemUi>, browser: @Composable () -> Unit, onRefresh: () -> Unit
 ) {
-    val rowKeys = remember(grades) { gradeRowKeys(grades) }
+    val rowKeys = remember(visibleGrades) { gradeRowKeys(visibleGrades) }
     when {
         isLoading && grades.isEmpty() -> {
             Box(
@@ -367,7 +378,8 @@ private fun OverallGradesContent(
             ) {
                 SystemEmptyState(
                     title = if (error.isNotBlank()) "总体成绩加载失败" else "暂无总体成绩",
-                    message = error.ifBlank { "点击刷新获取最新成绩" }
+                    message = error.ifBlank { "点击刷新获取最新成绩" },
+                    action = { com.tyust.course.ui.system.SystemPrimaryButton("重新读取", onRefresh, enabled = !isLoading) }
                 )
             }
         }
@@ -389,12 +401,14 @@ private fun OverallGradesContent(
                         GradeRefreshStatus(isLoading, error)
                         SystemStatStrip(
                             items = listOf(
-                                "累计绩点" to stats.gpa.ifBlank { "--" },
-                                "已修学分" to stats.credits.ifBlank { "0" },
-                                "总课程" to stats.courseCount.toString()
+                                "加权绩点" to stats.gpa.ifBlank { "--" },
+                                "确认学分" to stats.credits.ifBlank { "--" },
+                                "成绩记录" to stats.courseCount.toString()
                             )
                         )
                         GradeDistributionCard(stats = stats)
+                        browser()
+                        if (visibleGrades.isEmpty()) SystemEmptyState("没有匹配的课程", "更换课程名称或代码，或清除筛选。")
                         SystemSectionHeader(
                             title = "课程明细",
                             subtitle = "共 ${grades.size} 门课程"
@@ -402,8 +416,8 @@ private fun OverallGradesContent(
                     }
                 }
 
-                items(grades.size, key = { rowKeys[it] }, contentType = { "grade" }) { index ->
-                    GradeItemRow(item = grades[index])
+                items(visibleGrades.size, key = { rowKeys[it] }, contentType = { "grade" }) { index ->
+                    GradeItemRow(item = visibleGrades[index])
                 }
             }
         }
@@ -424,11 +438,12 @@ private fun SemesterGradesContent(
     bottomInset: Dp,
     semestersLoading: Boolean,
     semestersError: String,
-    onRefreshSemesters: (() -> Unit)?
+    onRefreshSemesters: (() -> Unit)?,
+    visibleGrades: List<GradeItemUi>, browser: @Composable () -> Unit, onRefresh: () -> Unit
 ) {
     val totalCredits = remember(grades) { grades.sumOf { it.credits.toDoubleOrNull() ?: 0.0 } }
     val averageGpa = remember(grades) { semesterAverageGpa(grades) }
-    val rowKeys = remember(grades) { gradeRowKeys(grades) }
+    val rowKeys = remember(visibleGrades) { gradeRowKeys(visibleGrades) }
 
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
@@ -454,7 +469,8 @@ private fun SemesterGradesContent(
 
                 when {
                     isLoading && grades.isEmpty() -> SystemLoadingState(text = "正在加载学期成绩…")
-                    error.isNotBlank() && grades.isEmpty() -> SystemEmptyState(title = "学期成绩加载失败", message = error)
+                    error.isNotBlank() && grades.isEmpty() -> SystemEmptyState(title = "学期成绩加载失败", message = error,
+                        action = { com.tyust.course.ui.system.SystemPrimaryButton("重新读取", onRefresh, enabled = !isLoading) })
                     grades.isEmpty() -> SystemEmptyState(
                         title = "暂无学期成绩",
                         message = if (currentSemester.isBlank()) {
@@ -469,10 +485,12 @@ private fun SemesterGradesContent(
                             SystemStatStrip(
                                 items = listOf(
                                     "平均绩点" to averageGpa,
-                                    "总学分" to String.format("%.1f", totalCredits),
-                                    "课程数" to grades.size.toString()
+                                    "课程学分" to String.format("%.1f", totalCredits),
+                                    "成绩记录" to grades.size.toString()
                                 )
                             )
+                            browser()
+                            if (visibleGrades.isEmpty()) SystemEmptyState("没有匹配的课程", "更换课程名称或代码，或清除筛选。")
                             SystemSectionHeader(
                                 title = "课程明细",
                                 subtitle = null
@@ -484,8 +502,8 @@ private fun SemesterGradesContent(
         }
 
         if (grades.isNotEmpty()) {
-            items(grades.size, key = { rowKeys[it] }, contentType = { "grade" }) { index ->
-                GradeItemRow(item = grades[index])
+            items(visibleGrades.size, key = { rowKeys[it] }, contentType = { "grade" }) { index ->
+                GradeItemRow(item = visibleGrades[index])
             }
         }
     }
@@ -818,7 +836,8 @@ private fun ExamScheduleContent(
     error: String,
     listState: LazyListState,
     topInset: Dp,
-    bottomInset: Dp
+    bottomInset: Dp,
+    onRefresh: () -> Unit, onOpenOfficial: (() -> Unit)?
 ) {
     when {
         isLoading && exams.isEmpty() -> {
@@ -837,7 +856,8 @@ private fun ExamScheduleContent(
             ) {
                 SystemEmptyState(
                     title = if (error.isNotBlank()) "考试安排加载失败" else "暂无考试安排",
-                    message = error.ifBlank { "点击刷新获取最新考试信息" }
+                    message = error.ifBlank { "点击刷新获取最新考试信息" },
+                    action = { com.tyust.course.ui.system.SystemPrimaryButton(if (onOpenOfficial != null) "查看官方考试安排" else "重新读取", onOpenOfficial ?: onRefresh, enabled = !isLoading) }
                 )
             }
         }

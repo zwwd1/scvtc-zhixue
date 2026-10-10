@@ -32,8 +32,8 @@ object AcademicStudyBridge {
 
     fun stats(report: AcademicGradeReport): OverallStatsUi {
         val graded = report.grades.mapNotNull { item ->
-            val credit = item.credits.toDoubleOrNull() ?: return@mapNotNull null
-            val point = item.gradePoint.toDoubleOrNull() ?: return@mapNotNull null
+            val credit = item.credits.toDoubleOrNull()?.takeIf { it.isFinite() && it > 0 } ?: return@mapNotNull null
+            val point = item.gradePoint.toDoubleOrNull()?.takeIf { it.isFinite() && it >= 0 } ?: return@mapNotNull null
             credit to point
         }
         val weightedCredits = graded.sumOf { it.first }

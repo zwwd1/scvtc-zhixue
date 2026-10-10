@@ -1,6 +1,12 @@
 # 川职·知学
 
-四川职业技术学院非官方 Android 应用，由 **zwwd1** 维护。1.0.0 是本项目第一版，当前维护版为 **1.2.0**。知学保留原生课表、成绩卡片、考试、提醒和小组件，服务中心只显示课表、成绩、学分，其他业务通过学校官方教务页面办理。
+四川职业技术学院非官方 Android 应用，由 **zwwd1** 维护。1.0.0 是本项目第一版，当前源码维护版为 **1.2.1**；已公开的正式 APK 为 **1.2.0**。知学保留原生课表、成绩卡片、考试、提醒和小组件，服务中心只显示课表、成绩、学分，其他业务通过学校官方教务页面办理。
+
+## 1.2.1
+
+首页和服务中心共用原生成绩页，增加搜索、课程性质筛选与排序，导出遵循当前筛选结果。先显示本机加密缓存，刷新失败保留成绩；完善学分概况、同步任务、退出确认与 AI 停止/重试和配置保存。
+
+[具体操作、修改位置与待用户验收事项](docs/UI_FLOWS_20261010.md)。保留现有 Miuix、壁纸和完整玻璃动效。本轮不连接手机，不执行功能或性能测试；必要构建结果见验证报告。
 
 ## 1.2.0
 
@@ -8,10 +14,12 @@
 
 [按本次 IMG-01～IMG-17 的修改与验收](docs/OPTIMIZATION_20261010.md) · [原创素材](docs/BRANDING_20261010.md)。本轮不连接手机、不执行功能或性能测试，编译和签名不能代替实际体验。历史验收保留在对应日期报告中。
 
+1.2.1 正式 GitHub 发布目前被插件平台一致性检查拦住：项目仍使用已发布的 3.2.9 契约，上游现为 3.5.0。本轮不冒称支持新契约，也不绕过发布检查。新构建 APK 与验证记录作为本机交付提供，源码在本项目继续维护。
+
 ## 下载
 
-- [1.2.0 原签名 APK](https://github.com/zwwd1/scvtc-zhixue/releases/download/v1.2.0/scvtc-zhixue-1.2.0.apk) · [SHA-256](https://github.com/zwwd1/scvtc-zhixue/releases/download/v1.2.0/scvtc-zhixue-1.2.0.apk.sha256)
-- [1.2.0 发布页](https://github.com/zwwd1/scvtc-zhixue/releases/tag/v1.2.0) · [对应源码](https://github.com/zwwd1/scvtc-zhixue/archive/refs/tags/v1.2.0.zip)
+- [1.2.0 正式原签名 APK](https://github.com/zwwd1/scvtc-zhixue/releases/download/v1.2.0/scvtc-zhixue-1.2.0.apk) · [SHA-256](https://github.com/zwwd1/scvtc-zhixue/releases/download/v1.2.0/scvtc-zhixue-1.2.0.apk.sha256)
+- [1.2.0 正式发布页](https://github.com/zwwd1/scvtc-zhixue/releases/tag/v1.2.0) · [1.2.0 对应源码](https://github.com/zwwd1/scvtc-zhixue/archive/refs/tags/v1.2.0.zip)
 - [构建与签名对应关系](BUILD_PROVENANCE.json) · [验证范围](VERIFICATION.md)
 
 最低 Android 13。已有安装请直接覆盖，保留应用数据；不要先卸载。自行更换签名的构建不能覆盖本项目原签名 APK。

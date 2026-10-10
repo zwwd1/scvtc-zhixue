@@ -316,12 +316,19 @@ class ScvtcNativeAdapter(private val key:String):AcademicStudyAdapter {
   return saved.records.filter{term==null || it.fields["学期"].isNullOrBlank() || it.fields["学期"]==term.id}
  }
  private fun NativeRecord.field(vararg names:String):String = names.firstNotNullOfOrNull { name -> fields.entries.firstOrNull{it.key.replace(" ","")==name}?.value?.takeIf{it.isNotBlank()} }.orEmpty()
- override suspend fun grades(term:AcademicTerm?):AcademicGradeReport {
-  val values=records("grades",term).mapNotNull{r->
+ suspend fun cachedGrades():AcademicGradeReport? {
+  checkScope()
+  val saved=ScvtcRuntime.allGrades() ?: return null
+  checkScope()
+  return gradeReport(saved.records)
+ }
+ override suspend fun grades(term:AcademicTerm?):AcademicGradeReport = gradeReport(records("grades",term))
+ private fun gradeReport(records:List<NativeRecord>):AcademicGradeReport {
+  val values=records.mapNotNull{r->
    val name=r.field("课程名称","课程名","名称");val score=r.field("成绩","总评成绩","最终成绩","分数")
    if(name.isBlank()||score.isBlank())null else AcademicGrade(name,score,r.field("学分"),r.field("绩点","课程绩点"),type=r.field("课程性质","课程类型","修读类型"),term=r.field("学期","学年学期"),code=r.field("课程代码","课程编号","课程号"),detail=r.fields.entries.joinToString("\n"){it.key+"："+it.value})
   }
-  return AcademicGradeReport(values)
+  return AcademicGradeReport(values,totalCredits=cn.scvtc.campus.core.CreditSummary.from(records).display)
  }
  override suspend fun exams(term:AcademicTerm):List<AcademicExam> {
   val values=records("exams",term).mapNotNull{r->

@@ -107,12 +107,15 @@ private fun CampusAssistant(onBack: () -> Unit) {
     val account = UserManager.getInstance().currentAccountStorageKey
     val store = remember(context) { AssistantStore(context) }; val scope = rememberCoroutineScope()
     var config by remember { mutableStateOf(AssistantConfig()) }
-    var settings by remember { mutableStateOf(false) }; var loaded by remember { mutableStateOf(false) }
+    var settings by remember { mutableStateOf(false) }; var loaded by remember(account) { mutableStateOf(false) }
     var messages by remember(account) { mutableStateOf(emptyList<AssistantMessage>()) }
-    var input by remember { mutableStateOf("") }; var error by remember { mutableStateOf("") }
-    var includeCourses by remember(account) { mutableStateOf(false) }; var job by remember { mutableStateOf<Job?>(null) }
-    var busy by remember { mutableStateOf(false) }; val list = rememberLazyListState()
+    var input by androidx.compose.runtime.saveable.rememberSaveable(account) { mutableStateOf("") }; var error by remember(account) { mutableStateOf("") }
+    var includeCourses by remember(account) { mutableStateOf(false) }; var job by remember(account) { mutableStateOf<Job?>(null) }
+    var busy by remember(account) { mutableStateOf(false) }; val list = rememberLazyListState()
     var settingsError by remember { mutableStateOf("") }
+    var settingsSaving by remember { mutableStateOf(false) }
+    var confirmClear by remember { mutableStateOf(false) }
+    var clearing by remember { mutableStateOf(false) }
     DisposableEffect(account) { onDispose { job?.cancel() } }
     LaunchedEffect(account) {
         try {
@@ -124,10 +127,10 @@ private fun CampusAssistant(onBack: () -> Unit) {
         loaded = true
     }
     LaunchedEffect(messages.size) { if (messages.isNotEmpty()) list.animateScrollToItem(messages.lastIndex + 1) }
-    fun send() {
-        if (busy || !loaded || input.isBlank()) return
+    fun request(next: List<AssistantMessage>) {
+        if (busy || !loaded || clearing) return
         if (config.apiKey.isBlank() || config.model.isBlank() || config.endpoint.isBlank()) { settings = true; return }
-        val next = messages + AssistantMessage("user", input.trim().take(12000)); input = ""; messages = next; error = ""
+        messages = next; error = ""
         busy = true
         job = scope.launch {
             try {
@@ -140,16 +143,43 @@ private fun CampusAssistant(onBack: () -> Unit) {
                     ScvtcRuntime.extraction()?.meetings.orEmpty().take(120).joinToString("\n") { "${it.name}：星期${it.day}，${it.startNode}-${it.endNode}节，周次${it.weeks.joinToString(",")}，${it.room}" }
                 } else ""
                 val answer = AssistantApi.answer(config, next, if (includeCourses) "\n用户同意参考以下本机课表（不代表实时教务状态）：\n$courses" else "")
+                check(UserManager.getInstance().currentAccountStorageKey == account) { "账号已切换，请重新打开 AI 助手" }
                 messages = (next + AssistantMessage("assistant", answer)).takeLast(100)
                 withContext(Dispatchers.IO) { store.write("history:$account", historyJson(messages)) }
-            } catch (e: Exception) { if (e is CancellationException) throw e; error = e.message ?: "AI 请求失败" }
+            } catch (e: Exception) {
+                if (e is CancellationException) { error = "已停止，问题已保留，可重试上一条"; throw e }
+                error = e.message ?: "AI 请求失败，问题已保留"
+            }
             finally { busy = false }
         }
     }
-    if (settings) AssistantSettings(config, settingsError, onDismiss = { settings = false; settingsError = "" }) { value ->
+    fun send() {
+        if (busy || !loaded || clearing || input.isBlank()) return
+        if (config.apiKey.isBlank() || config.model.isBlank() || config.endpoint.isBlank()) { settings = true; return }
+        val next = messages + AssistantMessage("user", input.trim().take(12000))
+        input = ""
+        request(next)
+    }
+    if (confirmClear) SystemDialog(onDismissRequest = { if (!clearing) confirmClear = false }, title = { Text("清除本机对话？") },
+        confirmButton = { SystemDestructiveButton(if (clearing) "正在清除…" else "清除对话", {
+            clearing = true
+            scope.launch {
+                try { withContext(Dispatchers.IO) { store.clearHistory(account) }; messages = emptyList(); error = ""; confirmClear = false }
+                catch (e: CancellationException) { throw e }
+                catch (e: Exception) { error = "本机对话未能清除，原记录保留"; confirmClear = false }
+                finally { clearing = false }
+            }
+        }, enabled = !clearing) }, dismissButton = { SystemSecondaryButton("保留对话", { confirmClear = false }, enabled = !clearing) }) {
+        NextText("只删除当前账号在这台设备上的 AI 对话。学校成绩、课表和其他账号记录不受影响。")
+    }
+    if (settings) AssistantSettings(config, settingsError, settingsSaving, onDismiss = { if (!settingsSaving) { settings = false; settingsError = "" } }) { value ->
+        if (!settingsSaving) {
+        settingsSaving = true
         scope.launch {
             try { withContext(Dispatchers.IO) { AssistantApi.endpoint(value.endpoint); require(value.model.isNotBlank() && value.apiKey.isNotBlank()) { "请填写模型和密钥" }; store.write("configuration", value.json()) }; config = value; settings = false; error = "" }
             catch (e: Exception) { if (e is CancellationException) throw e; settingsError = e.message ?: "配置保存失败" }
+            finally { settingsSaving = false }
+        }
         }
     }
     Scaffold(containerColor = Color.Transparent, topBar = { SystemTopBar("AI 助手小澄", navigationIcon = {
@@ -157,11 +187,13 @@ private fun CampusAssistant(onBack: () -> Unit) {
     }, actions = { SystemIconButton(Icons.Outlined.Settings, "AI 配置", { settings = true }) }) }, bottomBar = {
         NextGroup { Column(Modifier.navigationBarsPadding().imePadding().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             NextSwitch("本次对话允许参考本机课表", includeCourses) { includeCourses = it }
-            GlassTextField(input, { input = it }, Modifier.fillMaxWidth().heightIn(max = 160.dp), "输入学习问题", singleLine = false, enabled = !busy)
+            GlassTextField(input, { input = it }, Modifier.fillMaxWidth().heightIn(max = 160.dp), "输入学习问题", singleLine = false, enabled = loaded && !busy && !clearing)
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                NextButton(if (busy) "停止" else "发送") { if (busy) job?.cancel() else send() }
-                NextButton("清除本机对话") { if (!busy) scope.launch { withContext(Dispatchers.IO) { store.clearHistory(account) }; messages = emptyList() } }
+                SystemPrimaryButton(if (busy) "停止" else "发送", { if (busy) job?.cancel() else send() },
+                    enabled = loaded && !clearing && (busy || input.isNotBlank()))
+                SystemSecondaryButton("清除对话", { confirmClear = true }, enabled = loaded && !busy && !clearing && messages.isNotEmpty())
             }
+            if (!busy && loaded && messages.lastOrNull()?.role == "user") SystemSecondaryButton("重试上一条", { request(messages) }, enabled = !clearing)
             if (error.isNotBlank()) Text(error, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
         } }
     }) { padding ->
@@ -181,16 +213,16 @@ private fun CampusAssistant(onBack: () -> Unit) {
 }
 
 @Composable
-private fun AssistantSettings(current: AssistantConfig, error: String, onDismiss: () -> Unit, onSave: (AssistantConfig) -> Unit) {
+private fun AssistantSettings(current: AssistantConfig, error: String, saving: Boolean, onDismiss: () -> Unit, onSave: (AssistantConfig) -> Unit) {
     var endpoint by remember { mutableStateOf(current.endpoint) }; var model by remember { mutableStateOf(current.model) }
     var key by remember { mutableStateOf(current.apiKey) }
     SystemDialog(onDismissRequest = onDismiss, title = { Text("AI 服务配置") }, confirmButton = {
-        NextButton("加密保存") { onSave(AssistantConfig(endpoint.trim(), model.trim(), key.trim())) }
-    }, dismissButton = { NextButton("取消", onClick = onDismiss) }) {
+        SystemPrimaryButton(if (saving) "正在保存…" else "加密保存", { onSave(AssistantConfig(endpoint.trim(), model.trim(), key.trim())) }, enabled = !saving && endpoint.isNotBlank() && model.isNotBlank() && key.isNotBlank())
+    }, dismissButton = { SystemSecondaryButton("取消", onDismiss, enabled = !saving) }) {
         NextText("支持 Chat Completions 协议的 HTTPS 服务；地址可填写到 /v1 或完整 /chat/completions。")
-        GlassTextField(endpoint, { endpoint = it }, Modifier.fillMaxWidth(), "HTTPS 服务地址")
-        GlassTextField(model, { model = it }, Modifier.fillMaxWidth(), "模型名称")
-        GlassTextField(key, { key = it }, Modifier.fillMaxWidth(), "API Key", visualTransformation = PasswordVisualTransformation())
+        GlassTextField(endpoint, { endpoint = it }, Modifier.fillMaxWidth(), "HTTPS 服务地址", enabled = !saving)
+        GlassTextField(model, { model = it }, Modifier.fillMaxWidth(), "模型名称", enabled = !saving)
+        GlassTextField(key, { key = it }, Modifier.fillMaxWidth(), "API Key", visualTransformation = PasswordVisualTransformation(), enabled = !saving)
         if (error.isNotBlank()) Text(error, color = MaterialTheme.colorScheme.error)
     }
 }
