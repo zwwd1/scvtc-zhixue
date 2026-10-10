@@ -56,7 +56,8 @@ with tempfile.TemporaryDirectory() as temporary:
     sdk = Path(os.environ['ANDROID_HOME']) / 'build-tools'
     tools = sorted((p for p in sdk.iterdir() if (p / 'apksigner').is_file()), key=lambda p: tuple(map(int, re.findall(r'\d+', p.name))))[-1]
     cert = subprocess.check_output([str(tools/'apksigner'), 'verify', '--verbose', '--print-certs', str(path)], text=True)
-    assert 'Signer #1 certificate SHA-256 digest: ' + expected[1] in cert
+    certificate_digests = re.findall(r'certificate SHA-256 digest: ([0-9a-fA-F]{64})', cert)
+    assert {value.lower() for value in certificate_digests} == {expected[1]}, cert
     manifest = subprocess.check_output([str(tools/'aapt'), 'dump', 'badging', str(path)], text=True)
     assert "package: name='" + expected[0] + "' versionCode='" + str(artifact['versionCode']) + "' versionName='" + META['version'] + "'" in manifest
     assert 'application-debuggable' not in manifest

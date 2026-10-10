@@ -1,20 +1,52 @@
 {
   "schemaVersion": 2,
   "name": "川职·知学",
-  "version": "1.2.0",
   "builtAtDate": "2026-10-10",
-  "status": "source_frozen_before_final_packaging",
+  "sourceCommit": "3d138622e1f1dd3e95cbd90a2a38d496abf60f83",
+  "sourceTree": "c0e2f1c340310f0246b13451336740ade1d5d40d",
   "sourceRepository": "https://github.com/zwwd1/scvtc-zhixue",
+  "productionInputsUnchangedAfterBuild": true,
   "artifact": {
     "file": "scvtc-zhixue-1.2.0.apk",
+    "sha256": "dba7321d68d72de4e64551887acb55d6f7550260bd0458b45d58a3a5efc48f30",
+    "size": 27689511,
+    "packageName": "cn.scvtc.campus.next",
     "versionName": "1.2.0",
     "versionCode": 9,
-    "packageName": "cn.scvtc.campus.next",
-    "certificateSha256": "f4eb44ef0231232918e6bfe2bae00506d9bb77c49b6f516869fadaf2dcff7aed"
+    "certificateSha256": "f4eb44ef0231232918e6bfe2bae00506d9bb77c49b6f516869fadaf2dcff7aed",
+    "nativeLibraryCount": 8
   },
-  "finalArtifactReport": "GitHub Release attached BUILD_PROVENANCE.json and main branch report",
-  "deviceVerification": "not_run_user_will_test",
+  "checks": {
+    "manifest": true,
+    "originalSignature": true,
+    "zip16KiBAlignment": true,
+    "elf16KiBAlignment": true,
+    "crc": true,
+    "sourceAssets": true,
+    "sourceCommit": true,
+    "originalDonationPng": true,
+    "noPlaintextCredentials": true,
+    "r8Mapping": true
+  },
+  "releaseBuild": "passed",
+  "releaseLintVital": "passed",
+  "fullLint": "not_completed",
   "functionalTests": "not_run_at_user_request",
+  "deviceTests": "not_run_at_user_request",
+  "sourceArchive": {
+    "sha256": "a84fe3a67f37f19f3afdde6c1793f1c380413594d48c35c13cea50e8c576631a",
+    "bytes": 27203837,
+    "fileCount": 991,
+    "matchesSourceCommit": true
+  },
+  "additionalBuildInputs": {
+    "originalDonationPngSha256": "8ebf7c9b12fbe2917878bad2be227a24987b700a1859177ae63be9bc1bd86ce5"
+  },
+  "r8Mapping": {
+    "id": "924c69a24bc9d08eb2b87ad079a691bb571e002fe1621d831e8ce1dafca9beec",
+    "sha256": "0672535d7a06ad7c45996ea3fa5f21053f0faa4ba784c46de73e3aab2523a38e"
+  },
+  "expectedReleaseUrl": "https://github.com/zwwd1/scvtc-zhixue/releases/tag/v1.2.0",
   "cloudServicesPaused": true,
   "report": "VERIFICATION.md"
 }
