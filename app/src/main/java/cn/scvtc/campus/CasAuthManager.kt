@@ -27,6 +27,7 @@ class CasAuthManager(private val context:Context,private val api:JwxtApi) {
         val failure=CompletableDeferred<Unit>()
         val recoveryPages=mutableSetOf<String>()
         var submitted=password==null
+        var targetReady=password==null
         val web=WebView(context.applicationContext)
         web.settings.javaScriptEnabled=true;web.settings.domStorageEnabled=true
         web.settings.allowFileAccess=false;web.settings.allowContentAccess=false
@@ -48,6 +49,7 @@ class CasAuthManager(private val context:Context,private val api:JwxtApi) {
             }
             override fun onPageFinished(v:WebView,url:String) {
                 login.prepare(v);CookieManager.getInstance().flush()
+                if(Uri.parse(url).host=="jwxt.scvtc.edu.cn")targetReady=true
                 if(Uri.parse(url).host=="www.shulin-soft.com") {v.loadUrl(JWXT_SSO_ENTRY);return}
                 if(login.recoveryNavigation(v,account,url))return
                 if(Uri.parse(url).host=="cas.scvtc.edu.cn"&&recoveryPages.add(url)) {
@@ -73,7 +75,7 @@ class CasAuthManager(private val context:Context,private val api:JwxtApi) {
             withTimeout(90_000) {
                 while(true) {
                     if(failure.isCompleted)failure.await()
-                    if(!submitted){delay(500);continue}
+                    if(!submitted || !targetReady){delay(500);continue}
                     try {
                         val student=api.student(account)
                         login.confirmed(student.account,promoteEnrollment=password!=null)
