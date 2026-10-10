@@ -48,7 +48,11 @@
     "sha256": "a31ce930d42474c6827de359ed2ea6235ed7481e029b432630cee42410a3ebf4"
   },
   "expectedReleaseUrl": "https://github.com/zwwd1/scvtc-zhixue/releases/tag/v1.2.3",
-  "releasePublicationStatus": "pending",
+  "releasePublicationStatus": "published",
   "cloudServicesPaused": true,
-  "report": "VERIFICATION.md"
+  "report": "VERIFICATION.md",
+  "releasePublished": true,
+  "releaseUrl": "https://github.com/zwwd1/scvtc-zhixue/releases/tag/v1.2.3",
+  "releaseVerifiedAssetSha256": "a08e9f122ebbadf0537f91589a9b2396728d43747664447a2e69148e0a9672a4",
+  "releaseWorkflow": "https://github.com/zwwd1/scvtc-zhixue/actions/runs/38068969076"
 }
